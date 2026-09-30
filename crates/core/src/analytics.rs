@@ -291,15 +291,13 @@ pub fn payee_index(store: &Store) -> Vec<PayeeInfo> {
         if t.payee.is_empty() || t.is_transfer() {
             continue;
         }
-        let e = map
-            .entry(t.payee.to_lowercase())
-            .or_insert_with(|| PayeeInfo {
-                name: t.payee.clone(),
-                category: None,
-                account: t.account,
-                last_amount: 0,
-                count: 0,
-            });
+        let e = map.entry(t.payee.to_lowercase()).or_insert_with(|| PayeeInfo {
+            name: t.payee.clone(),
+            category: None,
+            account: t.account,
+            last_amount: 0,
+            count: 0,
+        });
         // Later transactions win: txns are sorted oldest first.
         e.name = t.payee.clone();
         e.category = t.category.or(e.category);
@@ -371,16 +369,9 @@ mod tests {
         let mut s = fixture();
         s.add_txn(txn(&s, date(2026, 5, 1), -2000, "Food")).unwrap();
         s.add_txn(txn(&s, date(2026, 5, 2), 500, "Food")).unwrap(); // refund
-        s.add_txn(txn(&s, date(2026, 5, 3), 100_000, "Salary"))
-            .unwrap();
+        s.add_txn(txn(&s, date(2026, 5, 3), 100_000, "Salary")).unwrap();
         s.add_txn(txn(&s, date(2026, 5, 4), -300, "Nope")).unwrap(); // uncategorized
-        let t = month_totals(
-            &s,
-            Month {
-                year: 2026,
-                month: 5,
-            },
-        );
+        let t = month_totals(&s, Month { year: 2026, month: 5 });
         assert_eq!(t.income, 100_000);
         assert_eq!(t.expense, 1800);
         assert_eq!(t.net(), 98_200);
@@ -392,20 +383,11 @@ mod tests {
     #[test]
     fn balances_and_series() {
         let mut s = fixture();
-        s.add_txn(txn(&s, date(2026, 1, 15), -10_000, "Food"))
-            .unwrap();
-        s.add_txn(txn(&s, date(2026, 2, 15), 50_000, "Salary"))
-            .unwrap();
+        s.add_txn(txn(&s, date(2026, 1, 15), -10_000, "Food")).unwrap();
+        s.add_txn(txn(&s, date(2026, 2, 15), 50_000, "Salary")).unwrap();
         let id = s.accounts()[0].id;
         assert_eq!(balances(&s)[&id], 100_000 - 10_000 + 50_000);
-        let series = net_worth_series(
-            &s,
-            Month {
-                year: 2026,
-                month: 2,
-            },
-            3,
-        );
+        let series = net_worth_series(&s, Month { year: 2026, month: 2 }, 3);
         assert_eq!(
             series.iter().map(|x| x.1).collect::<Vec<_>>(),
             vec![100_000, 90_000, 140_000]
@@ -430,15 +412,8 @@ mod tests {
             })
             .unwrap();
         let a = s.accounts()[0].id;
-        s.add_transfer(a, other, date(2026, 1, 1), 5000, None, "")
-            .unwrap();
-        let t = month_totals(
-            &s,
-            Month {
-                year: 2026,
-                month: 1,
-            },
-        );
+        s.add_transfer(a, other, date(2026, 1, 1), 5000, None, "").unwrap();
+        let t = month_totals(&s, Month { year: 2026, month: 1 });
         assert_eq!((t.income, t.expense), (0, 0));
         assert_eq!(net_worth(&s), 100_000);
     }

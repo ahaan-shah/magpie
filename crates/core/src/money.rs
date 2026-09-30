@@ -392,11 +392,7 @@ pub fn parse(input: &str, cur: Cur) -> Option<i64> {
     while frac_str.len() < exp {
         frac_str.push('0');
     }
-    let mut frac: i64 = if frac_str.is_empty() {
-        0
-    } else {
-        frac_str.parse().ok()?
-    };
+    let mut frac: i64 = if frac_str.is_empty() { 0 } else { frac_str.parse().ok()? };
     // Round on the first dropped digit.
     if let Some(next) = digits_frac.chars().nth(exp) {
         if next >= '5' {
@@ -417,12 +413,7 @@ pub fn to_input(minor: i64, cur: Cur) -> String {
     let scale = cur.scale();
     let sign = if minor < 0 { "-" } else { "" };
     let abs = minor.unsigned_abs() as i64;
-    format!(
-        "{sign}{}.{:0w$}",
-        abs / scale,
-        abs % scale,
-        w = exp as usize
-    )
+    format!("{sign}{}.{:0w$}", abs / scale, abs % scale, w = exp as usize)
 }
 
 #[cfg(test)]

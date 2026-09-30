@@ -10,8 +10,8 @@ use jiff::civil::Date;
 /// Category colours: distinct in hue and readable on both light and dark
 /// backgrounds.
 pub const PALETTE: [u32; 16] = [
-    0x5B8DEF, 0xF2994A, 0x27AE60, 0xEB5757, 0x9B51E0, 0x2DB5B5, 0xF2C94C, 0xE56BAF, 0x6FCF97,
-    0x56CCF2, 0xBB6BD9, 0xF08A5D, 0x8D99AE, 0xC0A062, 0x4FB3A9, 0xD96C75,
+    0x5B8DEF, 0xF2994A, 0x27AE60, 0xEB5757, 0x9B51E0, 0x2DB5B5, 0xF2C94C, 0xE56BAF, 0x6FCF97, 0x56CCF2, 0xBB6BD9,
+    0xF08A5D, 0x8D99AE, 0xC0A062, 0x4FB3A9, 0xD96C75,
 ];
 
 const DEFAULT_CATEGORIES: &[(&str, CategoryKind, &str)] = &[
@@ -97,8 +97,7 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
     let today = today();
     let start = Month::of(today).add(-months + 1).first();
     let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
-    let usd =
-        |store: &Store, dollars: f64| store.convert(Cur::USD.from_major(dollars), Cur::USD, base);
+    let usd = |store: &Store, dollars: f64| store.convert(Cur::USD.from_major(dollars), Cur::USD, base);
     let cat = |store: &Store, n: &str| store.find_category(n).map(|c| c.id);
 
     let travel_cur = if base == Cur::EUR {
@@ -133,14 +132,7 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
         8_000.0,
         PALETTE[2],
     )?;
-    let card = acct(
-        store,
-        "Visa card",
-        AccountKind::Credit,
-        base,
-        0.0,
-        PALETTE[3],
-    )?;
+    let card = acct(store, "Visa card", AccountKind::Credit, base, 0.0, PALETTE[3])?;
     let cash = acct(store, "Wallet", AccountKind::Cash, base, 120.0, PALETTE[6])?;
     let travel = acct(
         store,
@@ -150,14 +142,7 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
         300.0,
         PALETTE[4],
     )?;
-    let brokerage = acct(
-        store,
-        "Brokerage",
-        AccountKind::Investment,
-        base,
-        12_000.0,
-        PALETTE[5],
-    )?;
+    let brokerage = acct(store, "Brokerage", AccountKind::Investment, base, 12_000.0, PALETTE[5])?;
     store.update_settings(|s| s.default_account = Some(card))?;
 
     // Recurring rules — posted below by the recurring engine.
@@ -171,22 +156,8 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
             Freq::Monthly,
             1,
         ),
-        (
-            "City Power & Water",
-            checking,
-            "Utilities",
-            -140.0,
-            Freq::Monthly,
-            12,
-        ),
-        (
-            "Fiber Internet",
-            card,
-            "Utilities",
-            -65.0,
-            Freq::Monthly,
-            18,
-        ),
+        ("City Power & Water", checking, "Utilities", -140.0, Freq::Monthly, 12),
+        ("Fiber Internet", card, "Utilities", -65.0, Freq::Monthly, 18),
         ("Netflix", card, "Subscriptions", -15.49, Freq::Monthly, 7),
         ("Spotify", card, "Subscriptions", -11.99, Freq::Monthly, 21),
         ("Iron Temple Gym", card, "Health", -45.0, Freq::Monthly, 3),
@@ -221,12 +192,7 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
         note: String::new(),
         freq: Freq::Yearly,
         interval: 1,
-        start: Date::new(
-            yearly_start.year() - 1,
-            yearly_start.month(),
-            yearly_start.day(),
-        )
-        .unwrap_or(yearly_start),
+        start: Date::new(yearly_start.year() - 1, yearly_start.month(), yearly_start.day()).unwrap_or(yearly_start),
         end: None,
         posted: 0,
         auto_post: true,
@@ -243,19 +209,13 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
         interval: 6,
         start: (today + 9.days()) - 12.months(),
         end: None,
-        posted: 0,
+        posted: 2,
         auto_post: false,
         active: true,
     })?;
     crate::recurring::post_due(store, today)?;
 
-    let groceries = [
-        "Trader Joe's",
-        "Whole Foods",
-        "Safeway",
-        "Costco",
-        "Farmers market",
-    ];
+    let groceries = ["Trader Joe's", "Whole Foods", "Safeway", "Costco", "Farmers market"];
     let dining = [
         "Blue Bottle",
         "Chipotle",
@@ -267,47 +227,21 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
         "Pho 88",
     ];
     let transport = ["Uber", "Lyft", "Shell", "Chevron", "Metro card", "Parking"];
-    let shopping = [
-        "Amazon", "Target", "IKEA", "Uniqlo", "Apple", "Best Buy", "REI",
-    ];
-    let fun = [
-        "AMC Theatres",
-        "Steam",
-        "Concert tickets",
-        "Bowling",
-        "Museum",
-    ];
+    let shopping = ["Amazon", "Target", "IKEA", "Uniqlo", "Apple", "Best Buy", "REI"];
+    let fun = ["AMC Theatres", "Steam", "Concert tickets", "Bowling", "Museum"];
     let care = ["Barber", "Sephora", "Pharmacy"];
 
     let mut txns = Vec::new();
-    let add = |txns: &mut Vec<Txn>,
-               account,
-               date: Date,
-               amount: i64,
-               payee: &str,
-               category: Option<Id>,
-               tags: &[&str]| {
-        let mut t = Txn::blank(account, date);
-        t.amount = amount;
-        t.payee = payee.into();
-        t.category = category;
-        t.tags = tags.iter().map(|s| s.to_string()).collect();
-        txns.push(t);
-    };
-    let (
-        c_groc,
-        c_din,
-        c_tr,
-        c_shop,
-        c_fun,
-        c_care,
-        c_health,
-        c_gift,
-        c_trav,
-        c_free,
-        c_int,
-        c_edu,
-    ) = (
+    let add =
+        |txns: &mut Vec<Txn>, account, date: Date, amount: i64, payee: &str, category: Option<Id>, tags: &[&str]| {
+            let mut t = Txn::blank(account, date);
+            t.amount = amount;
+            t.payee = payee.into();
+            t.category = category;
+            t.tags = tags.iter().map(|s| s.to_string()).collect();
+            txns.push(t);
+        };
+    let (c_groc, c_din, c_tr, c_shop, c_fun, c_care, c_health, c_gift, c_trav, c_free, c_int, c_edu) = (
         cat(store, "Groceries"),
         cat(store, "Dining"),
         cat(store, "Transport"),
@@ -325,8 +259,7 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
     let mut trip_months = std::collections::HashSet::new();
     while d <= today {
         let wd = d.weekday().to_monday_zero_offset();
-        let season =
-            1.0 + 0.25 * ((d.month() as f64 - 1.0) / 12.0 * std::f64::consts::TAU).cos() * 0.4;
+        let season = 1.0 + 0.25 * ((d.month() as f64 - 1.0) / 12.0 * std::f64::consts::TAU).cos() * 0.4;
         if rng.chance(if wd >= 5 { 0.45 } else { 0.18 }) {
             let v = usd(store, -rng.range(18.0, 140.0) * season);
             add(&mut txns, card, d, v, rng.pick(&groceries), c_groc, &[]);
@@ -334,11 +267,7 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
         if rng.chance(if wd >= 4 { 0.55 } else { 0.28 }) {
             let v = usd(store, -rng.range(6.0, 68.0));
             let acc = if rng.chance(0.15) { cash } else { card };
-            let tags: &[&str] = if rng.chance(0.2) {
-                &["date-night"]
-            } else {
-                &[]
-            };
+            let tags: &[&str] = if rng.chance(0.2) { &["date-night"] } else { &[] };
             add(&mut txns, acc, d, v, rng.pick(&dining), c_din, tags);
         }
         if rng.chance(0.3) {
@@ -359,27 +288,11 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
         }
         if rng.chance(0.015) {
             let v = usd(store, -rng.range(20.0, 180.0));
-            add(
-                &mut txns,
-                checking,
-                d,
-                v,
-                "Dr. Patel's office",
-                c_health,
-                &["medical"],
-            );
+            add(&mut txns, checking, d, v, "Dr. Patel's office", c_health, &["medical"]);
         }
         if d.month() == 12 && d.day() > 5 && d.day() < 22 && rng.chance(0.25) {
             let v = usd(store, -rng.range(25.0, 120.0));
-            add(
-                &mut txns,
-                card,
-                d,
-                v,
-                rng.pick(&shopping),
-                c_gift,
-                &["holidays"],
-            );
+            add(&mut txns, card, d, v, rng.pick(&shopping), c_gift, &["holidays"]);
         }
         if rng.chance(0.012) {
             let v = usd(store, -rng.range(20.0, 60.0));
@@ -411,36 +324,12 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
         let m = Month::of(d);
         if (d.month() == 7 || d.month() == 12) && d.day() >= 14 && d.day() <= 21 {
             if trip_months.insert(m) {
-                let v = store.convert(
-                    Cur::USD.from_major(-rng.range(250.0, 600.0)),
-                    Cur::USD,
-                    travel_cur,
-                );
-                add(
-                    &mut txns,
-                    travel,
-                    d,
-                    v,
-                    "Hotel Lumière",
-                    c_trav,
-                    &["vacation"],
-                );
+                let v = store.convert(Cur::USD.from_major(-rng.range(250.0, 600.0)), Cur::USD, travel_cur);
+                add(&mut txns, travel, d, v, "Hotel Lumière", c_trav, &["vacation"]);
             }
             for _ in 0..2 {
-                let v = store.convert(
-                    Cur::USD.from_major(-rng.range(8.0, 70.0)),
-                    Cur::USD,
-                    travel_cur,
-                );
-                add(
-                    &mut txns,
-                    travel,
-                    d,
-                    v,
-                    "Café de Flore",
-                    c_din,
-                    &["vacation"],
-                );
+                let v = store.convert(Cur::USD.from_major(-rng.range(8.0, 70.0)), Cur::USD, travel_cur);
+                add(&mut txns, travel, d, v, "Café de Flore", c_din, &["vacation"]);
             }
         }
         d = d.tomorrow().unwrap();
@@ -459,35 +348,14 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
     while m.first() <= today {
         let pay_day = Date::new(m.year, m.month, 2).unwrap();
         if pay_day <= today {
-            store.add_transfer(
-                checking,
-                savings,
-                pay_day,
-                usd(store, 600.0),
-                None,
-                "Monthly savings",
-            )?;
-            store.add_transfer(
-                checking,
-                brokerage,
-                pay_day,
-                usd(store, 400.0),
-                None,
-                "Index fund",
-            )?;
+            store.add_transfer(checking, savings, pay_day, usd(store, 600.0), None, "Monthly savings")?;
+            store.add_transfer(checking, brokerage, pay_day, usd(store, 400.0), None, "Index fund")?;
             let card_bal = crate::analytics::balances_at(store, pay_day)[&card];
             if card_bal < 0 {
                 store.add_transfer(checking, card, pay_day, -card_bal, None, "Card payment")?;
             }
             if m.month == 6 || m.month == 11 {
-                store.add_transfer(
-                    checking,
-                    travel,
-                    pay_day,
-                    usd(store, 900.0),
-                    None,
-                    "Trip budget",
-                )?;
+                store.add_transfer(checking, travel, pay_day, usd(store, 900.0), None, "Trip budget")?;
             }
             if rng.chance(0.4) {
                 store.add_transfer(checking, cash, pay_day, usd(store, 100.0), None, "ATM")?;
@@ -512,13 +380,13 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
         ("Groceries", 600.0, false),
         ("Dining", 450.0, true),
         ("Transport", 320.0, false),
-        ("Shopping", 250.0, true),
+        ("Shopping", 250.0, false),
         ("Entertainment", 120.0, false),
         ("Subscriptions", 60.0, false),
         ("Utilities", 260.0, false),
         ("Housing", 1_850.0, false),
         ("Personal care", 60.0, false),
-        ("Travel", 500.0, true),
+        ("Travel", 160.0, true),
     ] {
         if let Some(c) = cat(store, name) {
             store.save_budget_plan(BudgetPlan {

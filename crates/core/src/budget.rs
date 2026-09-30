@@ -10,7 +10,7 @@ pub struct BudgetLine {
     pub category: Id,
     /// Budgeted for this month (override or the default plan).
     pub planned: i64,
-    /// Carried in from previous months when rollover is on (may be negative).
+    /// Unspent money carried in from previous months when rollover is on.
     pub carry: i64,
     pub spent: i64,
     pub rollover: bool,
@@ -64,8 +64,10 @@ fn carry(store: &Store, cat: Id, m: Month) -> i64 {
     let mut c = 0;
     let mut k = start;
     while k < m {
+        // Unspent money rolls forward; overspending is absorbed in its own
+        // month rather than haunting every month after it.
         if let Some(p) = planned(store, cat, k) {
-            c += p - category_spent(store, cat, k);
+            c = (c + p - category_spent(store, cat, k)).max(0);
         }
         k = k.next();
     }
@@ -84,11 +86,7 @@ pub fn month_budget(store: &Store, m: Month) -> Vec<BudgetLine> {
             Some(BudgetLine {
                 category: c.id,
                 planned,
-                carry: if plan.rollover {
-                    carry(store, c.id, m)
-                } else {
-                    0
-                },
+                carry: if plan.rollover { carry(store, c.id, m) } else { 0 },
                 spent: spent.get(&c.id).copied().unwrap_or(0),
                 rollover: plan.rollover,
             })
@@ -153,40 +151,18 @@ mod tests {
             rollover: true,
         })
         .unwrap();
-        s.add_txn(txn(&s, date(2026, 1, 5), -6_000, "Food"))
-            .unwrap();
-        s.add_txn(txn(&s, date(2026, 2, 5), -12_000, "Food"))
-            .unwrap();
-        s.add_txn(txn(&s, date(2026, 3, 5), -1_000, "Food"))
-            .unwrap();
-        let mar = month_budget(
-            &s,
-            Month {
-                year: 2026,
-                month: 3,
-            },
-        );
+        s.add_txn(txn(&s, date(2026, 1, 5), -6_000, "Food")).unwrap();
+        s.add_txn(txn(&s, date(2026, 2, 5), -12_000, "Food")).unwrap();
+        s.add_txn(txn(&s, date(2026, 3, 5), -1_000, "Food")).unwrap();
+        let mar = month_budget(&s, Month { year: 2026, month: 3 });
         // Jan +4000, Feb -2000 => carry 2000
         assert_eq!(mar[0].carry, 2_000);
         assert_eq!(mar[0].available(), 12_000);
         assert_eq!(mar[0].remaining(), 11_000);
 
-        s.set_budget_override(
-            food,
-            Month {
-                year: 2026,
-                month: 2,
-            },
-            Some(20_000),
-        )
-        .unwrap();
-        let mar = month_budget(
-            &s,
-            Month {
-                year: 2026,
-                month: 3,
-            },
-        );
+        s.set_budget_override(food, Month { year: 2026, month: 2 }, Some(20_000))
+            .unwrap();
+        let mar = month_budget(&s, Month { year: 2026, month: 3 });
         assert_eq!(mar[0].carry, 4_000 + 8_000);
     }
 
@@ -201,13 +177,9 @@ mod tests {
         })
         .unwrap();
         for m in 1..=3 {
-            s.add_txn(txn(&s, date(2026, m, 5), -3_050, "Food"))
-                .unwrap();
+            s.add_txn(txn(&s, date(2026, m, 5), -3_050, "Food")).unwrap();
         }
-        let apr = Month {
-            year: 2026,
-            month: 4,
-        };
+        let apr = Month { year: 2026, month: 4 };
         assert_eq!(month_budget(&s, apr)[0].carry, 0);
         assert_eq!(average_spend(&s, food, apr, 3), 3_100);
         assert!((month_progress(apr, date(2026, 4, 15)) - 0.5).abs() < 1e-6);

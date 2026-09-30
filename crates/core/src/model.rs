@@ -352,46 +352,12 @@ mod tests {
 
     #[test]
     fn month_math() {
-        let m = Month {
-            year: 2026,
-            month: 1,
-        };
-        assert_eq!(
-            m.prev(),
-            Month {
-                year: 2025,
-                month: 12
-            }
-        );
-        assert_eq!(
-            m.add(-13),
-            Month {
-                year: 2024,
-                month: 12
-            }
-        );
-        assert_eq!(
-            m.add(23),
-            Month {
-                year: 2027,
-                month: 12
-            }
-        );
-        assert_eq!(
-            Month {
-                year: 2024,
-                month: 2
-            }
-            .days(),
-            29
-        );
-        assert_eq!(
-            Month::parse("2026-09"),
-            Some(Month {
-                year: 2026,
-                month: 9
-            })
-        );
+        let m = Month { year: 2026, month: 1 };
+        assert_eq!(m.prev(), Month { year: 2025, month: 12 });
+        assert_eq!(m.add(-13), Month { year: 2024, month: 12 });
+        assert_eq!(m.add(23), Month { year: 2027, month: 12 });
+        assert_eq!(Month { year: 2024, month: 2 }.days(), 29);
+        assert_eq!(Month::parse("2026-09"), Some(Month { year: 2026, month: 9 }));
         assert_eq!(Month::parse("2026-13"), None);
     }
 }

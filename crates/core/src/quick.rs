@@ -54,9 +54,7 @@ fn weekday_of(tok: &str) -> Option<Weekday> {
     if t.len() < 3 {
         return None;
     }
-    days.iter()
-        .find(|(name, _)| name.starts_with(&t))
-        .map(|(_, w)| *w)
+    days.iter().find(|(name, _)| name.starts_with(&t)).map(|(_, w)| *w)
 }
 
 fn most_recent(today: Date, w: Weekday) -> Date {
@@ -78,11 +76,8 @@ fn recent_md(today: Date, month: i8, day: i8) -> Option<Date> {
 fn looks_numeric(tok: &str) -> bool {
     let t = tok.trim_start_matches(['+', '-', '$', '€', '£', '₹', '¥']);
     !t.is_empty()
-        && t.chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_digit() || c == '.')
-        && t.chars()
-            .all(|c| c.is_ascii_digit() || c == '.' || c == ',')
+        && t.chars().next().is_some_and(|c| c.is_ascii_digit() || c == '.')
+        && t.chars().all(|c| c.is_ascii_digit() || c == '.' || c == ',')
 }
 
 pub fn parse(input: &str, cur: Cur, today: Date) -> QuickEntry {
@@ -98,7 +93,17 @@ pub fn parse(input: &str, cur: Cur, today: Date) -> QuickEntry {
         if let Some(t) = tok.strip_prefix('#').filter(|t| !t.is_empty()) {
             e.tags.push(t.to_lowercase());
         } else if let Some(p) = tok.strip_prefix('@').filter(|t| !t.is_empty()) {
-            e.payee = unslug(p);
+            // `@Blue Bottle` — following Capitalized words continue the name.
+            let mut name = unslug(p);
+            while let Some(nx) = toks.get(i + 1)
+                && nx.chars().next().is_some_and(char::is_uppercase)
+                && !looks_numeric(nx)
+            {
+                name.push(' ');
+                name.push_str(nx);
+                i += 1;
+            }
+            e.payee = name;
         } else if let Some(c) = tok.strip_prefix('/').filter(|t| !t.is_empty()) {
             e.category = Some(unslug(c));
         } else if let Some(a) = tok.strip_prefix('~').filter(|t| !t.is_empty()) {
@@ -117,18 +122,13 @@ pub fn parse(input: &str, cur: Cur, today: Date) -> QuickEntry {
         } else if e.date.is_none()
             && lower.len() >= 2
             && lower.ends_with('d')
-            && lower[..lower.len() - 1]
-                .parse::<i64>()
-                .is_ok_and(|n| n < 1000)
+            && lower[..lower.len() - 1].parse::<i64>().is_ok_and(|n| n < 1000)
         {
             let n: i64 = lower[..lower.len() - 1].parse().unwrap_or(0);
             e.date = Some(today - n.days());
         } else if e.date.is_none() && lower.len() == 10 && lower.parse::<Date>().is_ok() {
             e.date = lower.parse().ok();
-        } else if e.date.is_none()
-            && month_of(tok).is_some()
-            && next.and_then(|n| n.parse::<i8>().ok()).is_some()
-        {
+        } else if e.date.is_none() && month_of(tok).is_some() && next.and_then(|n| n.parse::<i8>().ok()).is_some() {
             let d = next.and_then(|n| n.parse::<i8>().ok()).unwrap_or(1);
             e.date = recent_md(today, month_of(tok).unwrap_or(1), d);
             i += 1;
@@ -137,11 +137,7 @@ pub fn parse(input: &str, cur: Cur, today: Date) -> QuickEntry {
             && next.and_then(month_of).is_some()
             && e.amount.is_some()
         {
-            e.date = recent_md(
-                today,
-                next.and_then(month_of).unwrap_or(1),
-                tok.parse().unwrap_or(1),
-            );
+            e.date = recent_md(today, next.and_then(month_of).unwrap_or(1), tok.parse().unwrap_or(1));
             i += 1;
         } else if e.date.is_none() && weekday_of(tok).is_some() && lower.len() >= 3 {
             e.date = weekday_of(tok).map(|w| most_recent(today, w));
@@ -195,32 +191,23 @@ mod tests {
     }
 
     #[test]
+    fn multiword_payee() {
+        let e = parse("coffee 4.50 @Blue Bottle #treats", Cur::USD, TODAY);
+        assert_eq!(e.payee, "Blue Bottle");
+        assert_eq!(e.note, "Coffee");
+        let e = parse("@acme salary +10", Cur::USD, TODAY);
+        assert_eq!((e.payee.as_str(), e.note.as_str()), ("Acme", "Salary"));
+    }
+
+    #[test]
     fn dates() {
-        assert_eq!(
-            parse("x 1 mon", Cur::USD, TODAY).date,
-            Some(date(2026, 9, 28))
-        );
+        assert_eq!(parse("x 1 mon", Cur::USD, TODAY).date, Some(date(2026, 9, 28)));
         assert_eq!(parse("x 1 wed", Cur::USD, TODAY).date, Some(TODAY));
-        assert_eq!(
-            parse("x 1 3d", Cur::USD, TODAY).date,
-            Some(date(2026, 9, 27))
-        );
-        assert_eq!(
-            parse("x 1 sep 3", Cur::USD, TODAY).date,
-            Some(date(2026, 9, 3))
-        );
-        assert_eq!(
-            parse("x 1 dec 24", Cur::USD, TODAY).date,
-            Some(date(2025, 12, 24))
-        );
-        assert_eq!(
-            parse("x 12 3 sep", Cur::USD, TODAY).date,
-            Some(date(2026, 9, 3))
-        );
-        assert_eq!(
-            parse("x 1 2026-01-02", Cur::USD, TODAY).date,
-            Some(date(2026, 1, 2))
-        );
+        assert_eq!(parse("x 1 3d", Cur::USD, TODAY).date, Some(date(2026, 9, 27)));
+        assert_eq!(parse("x 1 sep 3", Cur::USD, TODAY).date, Some(date(2026, 9, 3)));
+        assert_eq!(parse("x 1 dec 24", Cur::USD, TODAY).date, Some(date(2025, 12, 24)));
+        assert_eq!(parse("x 12 3 sep", Cur::USD, TODAY).date, Some(date(2026, 9, 3)));
+        assert_eq!(parse("x 1 2026-01-02", Cur::USD, TODAY).date, Some(date(2026, 1, 2)));
     }
 
     #[test]

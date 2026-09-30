@@ -247,9 +247,7 @@ impl Store {
     }
 
     pub fn account_cur(&self, id: Id) -> Cur {
-        self.account(id)
-            .map(|a| a.currency)
-            .unwrap_or(self.settings.base)
+        self.account(id).map(|a| a.currency).unwrap_or(self.settings.base)
     }
 
     pub fn account_name(&self, id: Id) -> &str {
@@ -281,12 +279,7 @@ impl Store {
     pub fn delete_account(&mut self, id: Id) -> Result<()> {
         self.db.delete_account(id)?;
         self.accounts.retain(|a| a.id != id);
-        let removed: Vec<Id> = self
-            .txns
-            .iter()
-            .filter(|t| t.account == id)
-            .map(|t| t.id)
-            .collect();
+        let removed: Vec<Id> = self.txns.iter().filter(|t| t.account == id).map(|t| t.id).collect();
         self.txns.retain(|t| t.account != id);
         self.receipts.retain(|r| !removed.contains(&r.txn));
         self.rules.retain(|r| r.account != id);
@@ -314,9 +307,7 @@ impl Store {
 
     pub fn find_category(&self, name: &str) -> Option<&Category> {
         let n = name.trim();
-        self.categories
-            .iter()
-            .find(|c| c.name.eq_ignore_ascii_case(n))
+        self.categories.iter().find(|c| c.name.eq_ignore_ascii_case(n))
     }
 
     pub fn save_category(&mut self, mut c: Category) -> Result<Id> {
@@ -361,9 +352,14 @@ impl Store {
 
     /// Transactions with `from <= date <= to`, oldest first. O(log n).
     pub fn txns_between(&self, from: jiff::civil::Date, to: jiff::civil::Date) -> &[Txn] {
+        &self.txns[self.range_of(from, to)]
+    }
+
+    /// Index range into [`Store::txns`] for `from <= date <= to`.
+    pub fn range_of(&self, from: jiff::civil::Date, to: jiff::civil::Date) -> std::ops::Range<usize> {
         let a = self.txns.partition_point(|t| t.date < from);
         let b = self.txns.partition_point(|t| t.date <= to);
-        &self.txns[a..b.max(a)]
+        a..b.max(a)
     }
 
     pub fn txns_in(&self, m: Month) -> &[Txn] {
@@ -400,12 +396,7 @@ impl Store {
 
     fn raw_delete(&mut self, id: Id) -> Result<(Option<Txn>, Vec<Receipt>)> {
         self.db.delete_txn(id)?;
-        let receipts: Vec<Receipt> = self
-            .receipts
-            .iter()
-            .filter(|r| r.txn == id)
-            .cloned()
-            .collect();
+        let receipts: Vec<Receipt> = self.receipts.iter().filter(|r| r.txn == id).cloned().collect();
         self.receipts.retain(|r| r.txn != id);
         Ok((self.remove(id), receipts))
     }
@@ -517,12 +508,7 @@ impl Store {
         let mut all: Vec<Id> = ids.to_vec();
         for &id in ids {
             if let Some(g) = self.txn(id).and_then(|t| t.transfer) {
-                all.extend(
-                    self.txns
-                        .iter()
-                        .filter(|t| t.transfer == Some(g))
-                        .map(|t| t.id),
-                );
+                all.extend(self.txns.iter().filter(|t| t.transfer == Some(g)).map(|t| t.id));
             }
         }
         all.sort_unstable();
@@ -560,9 +546,7 @@ impl Store {
     ) -> Result<Id> {
         let amount = amount.abs();
         let (fc, tc) = (self.account_cur(from), self.account_cur(to));
-        let to_amount = to_amount
-            .map(i64::abs)
-            .unwrap_or_else(|| self.convert(amount, fc, tc));
+        let to_amount = to_amount.map(i64::abs).unwrap_or_else(|| self.convert(amount, fc, tc));
         let payee_out = format!("Transfer to {}", self.account_name(to));
         let payee_in = format!("Transfer from {}", self.account_name(from));
 
@@ -682,12 +666,7 @@ impl Store {
         Ok(())
     }
 
-    pub fn set_budget_override(
-        &mut self,
-        category: Id,
-        m: Month,
-        amount: Option<i64>,
-    ) -> Result<()> {
+    pub fn set_budget_override(&mut self, category: Id, m: Month, amount: Option<i64>) -> Result<()> {
         self.db.set_budget_override(category, m, amount)?;
         match amount {
             Some(a) => self.overrides.insert((category, m), a),
@@ -873,8 +852,7 @@ pub(crate) mod tests {
         let mut s = fixture();
         let a = s.add_txn(txn(&s, date(2026, 3, 5), -500, "Food")).unwrap();
         s.add_txn(txn(&s, date(2026, 3, 1), -300, "Food")).unwrap();
-        s.add_txn(txn(&s, date(2026, 3, 9), 9000, "Salary"))
-            .unwrap();
+        s.add_txn(txn(&s, date(2026, 3, 9), 9000, "Salary")).unwrap();
         let dates: Vec<_> = s.txns().iter().map(|t| t.date.day()).collect();
         assert_eq!(dates, vec![1, 5, 9]);
 
@@ -900,18 +878,8 @@ pub(crate) mod tests {
             s.add_txn(txn(&s, date(2026, 2, d), -100, "Food")).unwrap();
         }
         s.add_txn(txn(&s, date(2026, 3, 1), -100, "Food")).unwrap();
-        assert_eq!(
-            s.txns_in(Month {
-                year: 2026,
-                month: 2
-            })
-            .len(),
-            28
-        );
-        assert_eq!(
-            s.txns_between(date(2026, 2, 10), date(2026, 2, 12)).len(),
-            3
-        );
+        assert_eq!(s.txns_in(Month { year: 2026, month: 2 }).len(), 28);
+        assert_eq!(s.txns_between(date(2026, 2, 10), date(2026, 2, 12)).len(), 3);
         assert_eq!(s.txns_between(date(2027, 1, 1), date(2026, 1, 1)).len(), 0);
     }
 

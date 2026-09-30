@@ -159,9 +159,7 @@ impl Db {
     }
 
     fn migrate(&self) -> Result<()> {
-        let version: i64 = self
-            .conn
-            .query_row("PRAGMA user_version", [], |r| r.get(0))?;
+        let version: i64 = self.conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         for (i, sql) in MIGRATIONS.iter().enumerate().skip(version as usize) {
             let tx = self.conn.unchecked_transaction()?;
             tx.execute_batch(sql)?;
@@ -172,9 +170,7 @@ impl Db {
     }
 
     pub fn is_empty(&self) -> Result<bool> {
-        let n: i64 = self
-            .conn
-            .query_row("SELECT COUNT(*) FROM accounts", [], |r| r.get(0))?;
+        let n: i64 = self.conn.query_row("SELECT COUNT(*) FROM accounts", [], |r| r.get(0))?;
         Ok(n == 0)
     }
 
@@ -191,8 +187,7 @@ impl Db {
         if path.exists() {
             std::fs::remove_file(path)?;
         }
-        self.conn
-            .execute("VACUUM INTO ?1", [path.to_string_lossy()])?;
+        self.conn.execute("VACUUM INTO ?1", [path.to_string_lossy()])?;
         Ok(())
     }
 
@@ -201,9 +196,7 @@ impl Db {
     pub fn setting(&self, key: &str) -> Result<Option<String>> {
         Ok(self
             .conn
-            .query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| {
-                r.get(0)
-            })
+            .query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| r.get(0))
             .optional()?)
     }
 
@@ -256,8 +249,7 @@ impl Db {
     pub fn delete_account(&self, id: Id) -> Result<()> {
         self.conn
             .execute("DELETE FROM transactions WHERE account_id = ?1", [id])?;
-        self.conn
-            .execute("DELETE FROM accounts WHERE id = ?1", [id])?;
+        self.conn.execute("DELETE FROM accounts WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -297,8 +289,7 @@ impl Db {
     }
 
     pub fn delete_category(&self, id: Id) -> Result<()> {
-        self.conn
-            .execute("DELETE FROM categories WHERE id = ?1", [id])?;
+        self.conn.execute("DELETE FROM categories WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -405,14 +396,10 @@ impl Db {
     }
 
     pub fn delete_budget_plan(&self, category: Id) -> Result<()> {
-        self.conn.execute(
-            "DELETE FROM budget_plans WHERE category_id = ?1",
-            [category],
-        )?;
-        self.conn.execute(
-            "DELETE FROM budget_overrides WHERE category_id = ?1",
-            [category],
-        )?;
+        self.conn
+            .execute("DELETE FROM budget_plans WHERE category_id = ?1", [category])?;
+        self.conn
+            .execute("DELETE FROM budget_overrides WHERE category_id = ?1", [category])?;
         Ok(())
     }
 
@@ -421,11 +408,7 @@ impl Db {
             .conn
             .prepare("SELECT category_id, month, amount FROM budget_overrides")?;
         let rows = st.query_map([], |r| {
-            Ok((
-                r.get::<_, Id>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, i64>(2)?,
-            ))
+            Ok((r.get::<_, Id>(0)?, r.get::<_, String>(1)?, r.get::<_, i64>(2)?))
         })?;
         let mut out = Vec::new();
         for row in rows {
@@ -437,12 +420,7 @@ impl Db {
         Ok(out)
     }
 
-    pub fn set_budget_override(
-        &self,
-        category: Id,
-        month: Month,
-        amount: Option<i64>,
-    ) -> Result<()> {
+    pub fn set_budget_override(&self, category: Id, month: Month, amount: Option<i64>) -> Result<()> {
         match amount {
             Some(a) => self.conn.execute(
                 "INSERT INTO budget_overrides(category_id, month, amount) VALUES (?1,?2,?3)
@@ -506,8 +484,7 @@ impl Db {
     }
 
     pub fn delete_rule(&self, id: Id) -> Result<()> {
-        self.conn
-            .execute("DELETE FROM recurring WHERE id = ?1", [id])?;
+        self.conn.execute("DELETE FROM recurring WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -540,14 +517,35 @@ impl Db {
             self.conn.execute(
                 "INSERT INTO goals(name, target, currency, deadline, account_id, color, icon, created, archived)
                  VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
-                params![g.name, g.target, g.currency.code(), dl, g.account, g.color, g.icon, date_str(g.created), g.archived],
+                params![
+                    g.name,
+                    g.target,
+                    g.currency.code(),
+                    dl,
+                    g.account,
+                    g.color,
+                    g.icon,
+                    date_str(g.created),
+                    g.archived
+                ],
             )?;
             Ok(self.conn.last_insert_rowid())
         } else {
             self.conn.execute(
                 "UPDATE goals SET name=?2, target=?3, currency=?4, deadline=?5, account_id=?6, color=?7, icon=?8,
                  created=?9, archived=?10 WHERE id=?1",
-                params![g.id, g.name, g.target, g.currency.code(), dl, g.account, g.color, g.icon, date_str(g.created), g.archived],
+                params![
+                    g.id,
+                    g.name,
+                    g.target,
+                    g.currency.code(),
+                    dl,
+                    g.account,
+                    g.color,
+                    g.icon,
+                    date_str(g.created),
+                    g.archived
+                ],
             )?;
             Ok(g.id)
         }
@@ -559,9 +557,9 @@ impl Db {
     }
 
     pub fn contributions(&self) -> Result<Vec<Contribution>> {
-        let mut st = self.conn.prepare(
-            "SELECT id, goal_id, date, amount, note FROM contributions ORDER BY date, id",
-        )?;
+        let mut st = self
+            .conn
+            .prepare("SELECT id, goal_id, date, amount, note FROM contributions ORDER BY date, id")?;
         let rows = st.query_map([], |r| {
             Ok(Contribution {
                 id: r.get(0)?,
@@ -583,8 +581,7 @@ impl Db {
     }
 
     pub fn delete_contribution(&self, id: Id) -> Result<()> {
-        self.conn
-            .execute("DELETE FROM contributions WHERE id = ?1", [id])?;
+        self.conn.execute("DELETE FROM contributions WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -615,23 +612,16 @@ impl Db {
     }
 
     pub fn delete_receipt(&self, id: Id) -> Result<()> {
-        self.conn
-            .execute("DELETE FROM receipts WHERE id = ?1", [id])?;
+        self.conn.execute("DELETE FROM receipts WHERE id = ?1", [id])?;
         Ok(())
     }
 
     // ---------- fx ----------
 
     pub fn rates(&self) -> Result<Vec<(Cur, f64, bool)>> {
-        let mut st = self
-            .conn
-            .prepare("SELECT currency, per_eur, manual FROM fx_rates")?;
+        let mut st = self.conn.prepare("SELECT currency, per_eur, manual FROM fx_rates")?;
         let rows = st.query_map([], |r| {
-            Ok((
-                cur(&r.get::<_, String>(0)?),
-                r.get::<_, f64>(1)?,
-                r.get::<_, bool>(2)?,
-            ))
+            Ok((cur(&r.get::<_, String>(0)?), r.get::<_, f64>(1)?, r.get::<_, bool>(2)?))
         })?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }

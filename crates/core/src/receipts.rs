@@ -18,12 +18,7 @@ fn dir(store: &Store) -> Result<PathBuf> {
 }
 
 pub fn path_of(store: &Store, r: &Receipt) -> Option<PathBuf> {
-    Some(
-        store
-            .dir()?
-            .join("receipts")
-            .join(format!("{}.{}", r.hash, r.ext)),
-    )
+    Some(store.dir()?.join("receipts").join(format!("{}.{}", r.hash, r.ext)))
 }
 
 pub fn is_image(r: &Receipt) -> bool {

@@ -109,11 +109,7 @@ fn parse_frankfurter(body: &str) -> Result<(Vec<(Cur, f64)>, String)> {
         rates: HashMap<String, f64>,
     }
     let r: Resp = serde_json::from_str(body)?;
-    let mut out: Vec<(Cur, f64)> = r
-        .rates
-        .iter()
-        .filter_map(|(k, v)| Some((Cur::new(k)?, *v)))
-        .collect();
+    let mut out: Vec<(Cur, f64)> = r.rates.iter().filter_map(|(k, v)| Some((Cur::new(k)?, *v))).collect();
     out.push((Cur::EUR, 1.0));
     out.sort_by_key(|(c, _)| *c);
     Ok((out, r.date))
@@ -134,19 +130,14 @@ mod tests {
         assert_eq!(r.convert(12_500, Cur::USD, Cur::EUR), 10_000);
         assert_eq!(r.convert(10_000, Cur::USD, gbp), 6_400);
         let jpy = Cur::new("JPY").unwrap();
-        assert_eq!(
-            r.convert(100, Cur::USD, jpy),
-            100,
-            "unknown rate passes through"
-        );
+        assert_eq!(r.convert(100, Cur::USD, jpy), 100, "unknown rate passes through");
         r.set(jpy, 160.0, false);
         assert_eq!(r.convert(125, Cur::USD, jpy), 160);
     }
 
     #[test]
     fn parses_api_payload() {
-        let body =
-            r#"{"amount":1.0,"base":"EUR","date":"2026-09-29","rates":{"USD":1.1,"GBP":0.84}}"#;
+        let body = r#"{"amount":1.0,"base":"EUR","date":"2026-09-29","rates":{"USD":1.1,"GBP":0.84}}"#;
         let (rates, date) = parse_frankfurter(body).unwrap();
         assert_eq!(date, "2026-09-29");
         assert_eq!(rates.len(), 3);

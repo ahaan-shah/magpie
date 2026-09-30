@@ -90,7 +90,7 @@ fn make_txn(rule: &RecurringRule, date: Date) -> Txn {
         tags: Vec::new(),
         transfer: None,
         recurring: Some(rule.id),
-        cleared: false,
+        cleared: true,
     }
 }
 
@@ -268,10 +268,7 @@ mod tests {
 
     #[test]
     fn describes() {
-        assert_eq!(
-            describe(&rule(date(2026, 1, 3), Freq::Monthly)),
-            "Monthly on the 3rd"
-        );
+        assert_eq!(describe(&rule(date(2026, 1, 3), Freq::Monthly)), "Monthly on the 3rd");
         assert_eq!(ordinal(11), "11th");
         assert_eq!(ordinal(22), "22nd");
     }

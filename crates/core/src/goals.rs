@@ -69,9 +69,7 @@ pub fn status(store: &Store, g: &Goal, today: Date) -> GoalStatus {
         let months = ((d - today).get_days() as f64 / 30.44).max(1.0);
         (left as f64 / months).ceil() as i64
     });
-    let on_track = g
-        .deadline
-        .map(|d| left <= 0 || projected.is_some_and(|p| p <= d));
+    let on_track = g.deadline.map(|d| left <= 0 || projected.is_some_and(|p| p <= d));
     GoalStatus {
         saved,
         fraction,

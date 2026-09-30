@@ -123,6 +123,39 @@ pub fn export(store: &Store, txns: &[Txn], format: Format, path: &Path) -> Resul
     Ok(())
 }
 
+/// Net amount per category per month (income positive, spending negative),
+/// one row per category with any activity — a pivot table for spreadsheets.
+pub fn export_summary(store: &Store, months: &[Month], path: &Path) -> Result<()> {
+    let mut w = csv::Writer::from_path(path)?;
+    let mut header = vec!["category".to_string()];
+    header.extend(months.iter().map(|m| m.key()));
+    w.write_record(&header)?;
+    let base = store.base();
+    for c in store.categories() {
+        let vals: Vec<i64> = months
+            .iter()
+            .map(|m| {
+                store
+                    .txns_in(*m)
+                    .iter()
+                    .filter(|t| t.category == Some(c.id))
+                    .map(|t| {
+                        let (i, e) = crate::analytics::flow(store, t);
+                        i - e
+                    })
+                    .sum()
+            })
+            .collect();
+        if vals.iter().any(|v| *v != 0) {
+            let mut rec = vec![c.name.clone()];
+            rec.extend(vals.iter().map(|v| money::to_input(*v, base)));
+            w.write_record(&rec)?;
+        }
+    }
+    w.flush()?;
+    Ok(())
+}
+
 // ------------------------------------------------------------------ CSV import
 
 /// How to read a bank's CSV export.
@@ -162,19 +195,11 @@ impl DateFormat {
 }
 
 pub fn parse_date(s: &str, f: DateFormat) -> Option<Date> {
-    let parts: Vec<&str> = s
-        .trim()
-        .split(['-', '/', '.', ' '])
-        .filter(|p| !p.is_empty())
-        .collect();
+    let parts: Vec<&str> = s.trim().split(['-', '/', '.', ' ']).filter(|p| !p.is_empty()).collect();
     if parts.len() < 3 {
         return None;
     }
-    let n: Vec<i32> = parts
-        .iter()
-        .take(3)
-        .map(|p| p.parse().ok())
-        .collect::<Option<_>>()?;
+    let n: Vec<i32> = parts.iter().take(3).map(|p| p.parse().ok()).collect::<Option<_>>()?;
     let (y, m, d) = match f {
         DateFormat::Ymd => (n[0], n[1], n[2]),
         DateFormat::Dmy => (n[2], n[1], n[0]),
@@ -225,14 +250,7 @@ pub fn preview_csv(path: &Path) -> Result<CsvPreview> {
     let amount = find(&["amount", "amt", "value", "sum"]);
     let debit = find(&["debit", "withdrawal", "out", "paid out"]);
     let credit = find(&["credit", "deposit", "paid in"]);
-    let payee = find(&[
-        "payee",
-        "description",
-        "merchant",
-        "name",
-        "details",
-        "narration",
-    ]);
+    let payee = find(&["payee", "description", "merchant", "name", "details", "narration"]);
     let category = find(&["category"]);
     let note = find(&["memo", "note", "reference"]).filter(|c| Some(*c) != payee);
 
@@ -243,12 +261,7 @@ pub fn preview_csv(path: &Path) -> Result<CsvPreview> {
         .collect();
     let date_format = DateFormat::ALL
         .into_iter()
-        .max_by_key(|f| {
-            sample
-                .iter()
-                .filter(|s| parse_date(s, *f).is_some())
-                .count()
-        })
+        .max_by_key(|f| sample.iter().filter(|s| parse_date(s, *f).is_some()).count())
         .unwrap_or(DateFormat::Ymd);
 
     let (amount, debit, credit) = if amount.is_some() {
@@ -294,9 +307,7 @@ pub fn read_csv(store: &Store, path: &Path, map: &CsvMapping, account: Id) -> Re
         skipped: 0,
         new_categories: Vec::new(),
     };
-    let get = |rec: &csv::StringRecord, i: Option<usize>| {
-        i.and_then(|i| rec.get(i)).unwrap_or("").trim().to_string()
-    };
+    let get = |rec: &csv::StringRecord, i: Option<usize>| i.and_then(|i| rec.get(i)).unwrap_or("").trim().to_string();
     for rec in rdr.records() {
         let rec = rec?;
         let Some(date) = parse_date(&get(&rec, Some(map.date)), map.date_format) else {
@@ -324,11 +335,7 @@ pub fn read_csv(store: &Store, path: &Path, map: &CsvMapping, account: Id) -> Re
             match store.find_category(&cat_name) {
                 Some(c) => Some(c.id),
                 None => {
-                    if !out
-                        .new_categories
-                        .iter()
-                        .any(|n| n.eq_ignore_ascii_case(&cat_name))
-                    {
+                    if !out.new_categories.iter().any(|n| n.eq_ignore_ascii_case(&cat_name)) {
                         out.new_categories.push(cat_name.clone());
                     }
                     None
@@ -356,11 +363,7 @@ pub fn commit_import(store: &mut Store, mut result: ImportResult, label: &str) -
     for (i, name) in result.new_categories.iter().enumerate() {
         // A new category whose every row is money coming in is an income one.
         let tag = format!("__cat:{name}");
-        let mut rows = result
-            .txns
-            .iter()
-            .filter(|t| t.tags.contains(&tag))
-            .peekable();
+        let mut rows = result.txns.iter().filter(|t| t.tags.contains(&tag)).peekable();
         let income = rows.peek().is_some() && rows.all(|t| t.amount > 0);
         store.save_category(Category {
             id: 0,
@@ -461,18 +464,9 @@ mod tests {
 
     #[test]
     fn date_formats() {
-        assert_eq!(
-            parse_date("2026-09-30", DateFormat::Ymd),
-            Some(date(2026, 9, 30))
-        );
-        assert_eq!(
-            parse_date("30/09/2026", DateFormat::Dmy),
-            Some(date(2026, 9, 30))
-        );
-        assert_eq!(
-            parse_date("09/30/26", DateFormat::Mdy),
-            Some(date(2026, 9, 30))
-        );
+        assert_eq!(parse_date("2026-09-30", DateFormat::Ymd), Some(date(2026, 9, 30)));
+        assert_eq!(parse_date("30/09/2026", DateFormat::Dmy), Some(date(2026, 9, 30)));
+        assert_eq!(parse_date("09/30/26", DateFormat::Mdy), Some(date(2026, 9, 30)));
         assert_eq!(parse_date("13/13/2026", DateFormat::Mdy), None);
     }
 
@@ -503,15 +497,8 @@ mod tests {
         assert_eq!(res.new_categories, vec!["Home"]);
         assert_eq!(commit_import(&mut s, res, "Import").unwrap(), 3);
         let home = s.find_category("Home").unwrap().id;
-        let hw = s
-            .txns()
-            .iter()
-            .find(|t| t.payee == "Hardware store")
-            .unwrap();
-        assert_eq!(
-            (hw.amount, hw.category, hw.tags.len()),
-            (-1999, Some(home), 0)
-        );
+        let hw = s.txns().iter().find(|t| t.payee == "Hardware store").unwrap();
+        assert_eq!((hw.amount, hw.category, hw.tags.len()), (-1999, Some(home), 0));
 
         let out = dir.path().join("out.csv");
         let txns = s.txns().to_vec();
