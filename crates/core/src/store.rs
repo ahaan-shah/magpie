@@ -19,6 +19,8 @@ pub struct Settings {
     pub fx_updated: Option<String>,
     pub onboarded: bool,
     pub default_account: Option<Id>,
+    /// Interface zoom, 1.0 = 100%.
+    pub ui_scale: f32,
 }
 
 impl Default for Settings {
@@ -30,6 +32,7 @@ impl Default for Settings {
             fx_updated: None,
             onboarded: false,
             default_account: None,
+            ui_scale: 1.0,
         }
     }
 }
@@ -40,7 +43,11 @@ enum Op {
     Insert(Vec<Txn>),
     Delete(Vec<Txn>, Vec<Receipt>),
     Update(Vec<(Txn, Txn)>),
+    /// Snapshots of budget categories (plan + overrides) to restore.
+    Budget(Vec<BudgetSnapshot>),
 }
+
+type BudgetSnapshot = (Id, Option<BudgetPlan>, Vec<(Month, i64)>);
 
 #[derive(Clone, Debug)]
 struct UndoEntry {
@@ -100,6 +107,9 @@ impl Store {
         settings.fx_updated = db.setting("fx_updated")?;
         settings.onboarded = db.setting("onboarded")?.as_deref() == Some("1");
         settings.default_account = db.setting("default_account")?.and_then(|v| v.parse().ok());
+        if let Some(v) = db.setting("ui_scale")?.and_then(|v| v.parse::<f32>().ok()) {
+            settings.ui_scale = v.clamp(0.6, 2.0);
+        }
 
         let mut rates = Rates::defaults();
         for (c, r, manual) in db.rates()? {
@@ -180,6 +190,7 @@ impl Store {
             db.set_setting("fx_updated", u)?;
         }
         db.set_setting("onboarded", if s.onboarded { "1" } else { "0" })?;
+        db.set_setting("ui_scale", &format!("{:.2}", s.ui_scale))?;
         if let Some(a) = s.default_account {
             db.set_setting("default_account", &a.to_string())?;
         }
@@ -206,6 +217,136 @@ impl Store {
         } else {
             self.to_base(t.amount, c)
         }
+    }
+
+    /// Switches the main currency. Budgets (always denominated in the main
+    /// currency) and goals in the old main currency are converted at
+    /// today's rate. With `convert_accounts`, accounts in the old currency
+    /// move too: their opening balance, transactions and recurring rules
+    /// are converted. Returns how many accounts were converted. Not undoable.
+    pub fn change_base(&mut self, new: Cur, convert_accounts: bool) -> Result<usize> {
+        let old = self.settings.base;
+        if old == new {
+            return Ok(0);
+        }
+        let conv = |s: &Store, v: i64| s.rates.convert(v, old, new);
+        let plans: Vec<BudgetPlan> = self
+            .plans
+            .iter()
+            .map(|p| BudgetPlan {
+                amount: conv(self, p.amount),
+                ..p.clone()
+            })
+            .collect();
+        let overrides: Vec<((Id, Month), i64)> = self.overrides.iter().map(|(k, v)| (*k, conv(self, *v))).collect();
+        let goals: Vec<Goal> = self
+            .goals
+            .iter()
+            .filter(|g| g.currency == old)
+            .map(|g| Goal {
+                target: conv(self, g.target),
+                currency: new,
+                ..g.clone()
+            })
+            .collect();
+        let goal_ids: Vec<Id> = goals.iter().map(|g| g.id).collect();
+        let contributions: Vec<Contribution> = self
+            .contributions
+            .iter()
+            .filter(|c| goal_ids.contains(&c.goal))
+            .map(|c| Contribution {
+                amount: conv(self, c.amount),
+                ..c.clone()
+            })
+            .collect();
+        let accounts: Vec<Account> = if convert_accounts {
+            self.accounts
+                .iter()
+                .filter(|a| a.currency == old)
+                .map(|a| Account {
+                    opening: conv(self, a.opening),
+                    currency: new,
+                    ..a.clone()
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let acc_ids: Vec<Id> = accounts.iter().map(|a| a.id).collect();
+        let txns: Vec<(usize, i64)> = self
+            .txns
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| acc_ids.contains(&t.account))
+            .map(|(i, t)| (i, conv(self, t.amount)))
+            .collect();
+        let rules: Vec<RecurringRule> = self
+            .rules
+            .iter()
+            .filter(|r| acc_ids.contains(&r.account))
+            .map(|r| RecurringRule {
+                amount: conv(self, r.amount),
+                ..r.clone()
+            })
+            .collect();
+
+        self.db.batch(|db| {
+            for p in &plans {
+                db.save_budget_plan(p)?;
+            }
+            for ((c, m), a) in &overrides {
+                db.set_budget_override(*c, *m, Some(*a))?;
+            }
+            for g in &goals {
+                db.save_goal(g)?;
+            }
+            for c in &contributions {
+                db.update_contribution(c)?;
+            }
+            for a in &accounts {
+                db.save_account(a)?;
+            }
+            for (i, amount) in &txns {
+                let mut t = self.txns[*i].clone();
+                t.amount = *amount;
+                db.update_txn(&t)?;
+            }
+            for r in &rules {
+                db.save_rule(r)?;
+            }
+            db.set_setting("base", new.code())
+        })?;
+        self.plans = plans;
+        self.overrides = overrides.into_iter().collect();
+        for g in goals {
+            if let Some(slot) = self.goals.iter_mut().find(|x| x.id == g.id) {
+                *slot = g;
+            }
+        }
+        for c in contributions {
+            if let Some(slot) = self.contributions.iter_mut().find(|x| x.id == c.id) {
+                *slot = c;
+            }
+        }
+        let n = accounts.len();
+        for a in accounts {
+            if let Some(slot) = self.accounts.iter_mut().find(|x| x.id == a.id) {
+                *slot = a;
+            }
+        }
+        for (i, amount) in txns {
+            self.txns[i].amount = amount;
+        }
+        for r in rules {
+            if let Some(slot) = self.rules.iter_mut().find(|x| x.id == r.id) {
+                *slot = r;
+            }
+        }
+        self.settings.base = new;
+        self.undo.clear();
+        self.redo.clear();
+        self.touch();
+        Ok(n)
     }
 
     pub fn set_rate(&mut self, c: Cur, per_eur: f64, manual: bool) -> Result<()> {
@@ -606,7 +747,57 @@ impl Store {
                 }
                 Op::Update(pairs.iter().map(|(b, a)| (a.clone(), b.clone())).collect())
             }
+            Op::Budget(before) => {
+                let now = before.iter().map(|(c, _, _)| self.budget_snapshot(*c)).collect();
+                for snap in before {
+                    self.restore_budget(snap)?;
+                }
+                Op::Budget(now)
+            }
         })
+    }
+
+    fn budget_snapshot(&self, category: Id) -> BudgetSnapshot {
+        let mut overrides: Vec<(Month, i64)> = self
+            .overrides
+            .iter()
+            .filter(|((c, _), _)| *c == category)
+            .map(|((_, m), a)| (*m, *a))
+            .collect();
+        overrides.sort();
+        (category, self.budget_plan(category).cloned(), overrides)
+    }
+
+    fn restore_budget(&mut self, (category, plan, overrides): &BudgetSnapshot) -> Result<()> {
+        self.db.delete_budget_plan(*category)?;
+        self.plans.retain(|p| p.category != *category);
+        self.overrides.retain(|(c, _), _| c != category);
+        if let Some(p) = plan {
+            self.db.save_budget_plan(p)?;
+            self.plans.push(p.clone());
+        }
+        for (m, a) in overrides {
+            self.db.set_budget_override(*category, *m, Some(*a))?;
+            self.overrides.insert((*category, *m), *a);
+        }
+        Ok(())
+    }
+
+    /// Runs `f` (which edits budgets of `categories`) as one undoable step.
+    pub fn edit_budgets(
+        &mut self,
+        label: &str,
+        categories: &[Id],
+        f: impl FnOnce(&mut Store) -> Result<()>,
+    ) -> Result<()> {
+        let before: Vec<BudgetSnapshot> = categories.iter().map(|c| self.budget_snapshot(*c)).collect();
+        f(self)?;
+        let changed = before.iter().any(|b| self.budget_snapshot(b.0) != *b);
+        if changed {
+            self.record(label, Op::Budget(before));
+        }
+        self.touch();
+        Ok(())
     }
 
     /// Undoes the last change; returns its label.
@@ -871,6 +1062,58 @@ pub(crate) mod tests {
         assert_eq!(s.txn(a).unwrap().date, date(2026, 3, 5));
         s.redo().unwrap();
         assert_eq!(s.txn(a).unwrap().date, date(2026, 3, 20));
+    }
+
+    #[test]
+    fn budget_edits_undo() {
+        let mut s = fixture();
+        let food = s.find_category("Food").unwrap().id;
+        s.save_budget_plan(BudgetPlan {
+            category: food,
+            amount: 100,
+            rollover: false,
+        })
+        .unwrap();
+        s.edit_budgets("Fit budgets to average", &[food], |s| {
+            s.save_budget_plan(BudgetPlan {
+                category: food,
+                amount: 500,
+                rollover: true,
+            })?;
+            s.set_budget_override(food, Month { year: 2026, month: 1 }, Some(9))
+        })
+        .unwrap();
+        assert_eq!(s.budget_plan(food).unwrap().amount, 500);
+        assert_eq!(s.undo().unwrap().as_deref(), Some("Fit budgets to average"));
+        assert_eq!(s.budget_plan(food).unwrap().amount, 100);
+        assert_eq!(s.budget_override(food, Month { year: 2026, month: 1 }), None);
+        s.redo().unwrap();
+        assert_eq!(s.budget_plan(food).unwrap().amount, 500);
+    }
+
+    #[test]
+    fn changing_base_converts_budgets_and_accounts() {
+        let mut s = fixture();
+        s.set_rate(Cur::USD, 1.0, true).unwrap();
+        let inr = Cur::new("INR").unwrap();
+        s.set_rate(inr, 90.0, true).unwrap();
+        s.update_settings(|x| x.base = Cur::USD).unwrap();
+        let food = s.find_category("Food").unwrap().id;
+        s.save_budget_plan(BudgetPlan {
+            category: food,
+            amount: 10_000,
+            rollover: false,
+        })
+        .unwrap();
+        s.add_txn(txn(&s, date(2026, 1, 1), -500, "Food")).unwrap();
+        assert_eq!(s.change_base(inr, true).unwrap(), 1);
+        assert_eq!(s.base(), inr);
+        assert_eq!(s.budget_plan(food).unwrap().amount, 900_000);
+        assert_eq!(s.accounts()[0].currency, inr);
+        assert_eq!(s.accounts()[0].opening, 9_000_000);
+        assert_eq!(s.txns()[0].amount, -45_000);
+        // Reload from disk-equivalent state.
+        assert_eq!(s.db().txns().unwrap()[0].amount, -45_000);
     }
 
     #[test]

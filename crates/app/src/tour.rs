@@ -11,6 +11,7 @@ enum Extra {
     Quick(&'static str),
     NewTxn,
     Palette(&'static str),
+    Help,
 }
 
 pub struct Tour {
@@ -37,6 +38,7 @@ impl Tour {
         ));
         steps.push((Page::Dashboard, "Midnight", Extra::NewTxn));
         steps.push((Page::Dashboard, "Midnight", Extra::Palette("the")));
+        steps.push((Page::Dashboard, "Midnight", Extra::Help));
         steps.push((Page::Dashboard, "Daylight", Extra::None));
         steps.push((Page::Ledger, "Daylight", Extra::None));
         steps.push((Page::Budgets, "Paper", Extra::None));
@@ -66,6 +68,7 @@ impl Tour {
                 Extra::Quick(_) => app.ledger.clear_quick(),
                 Extra::NewTxn => app.modal = None,
                 Extra::Palette(_) => app.palette.open = false,
+                Extra::Help => app.modal = None,
             }
             let name = format!(
                 "{:02}-{}-{}.png",
@@ -104,6 +107,7 @@ impl Tour {
                     let f = crate::forms::TxnForm::new(&app.store, app.today);
                     app.open_modal(ctx, crate::forms::Modal::Txn(f));
                 }
+                Extra::Help => app.open_modal(ctx, crate::forms::Modal::Help),
                 Extra::Palette(q) => {
                     app.palette.toggle(ctx);
                     app.palette.set_query(q);

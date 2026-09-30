@@ -16,6 +16,7 @@ use std::rc::Rc;
 #[derive(Default)]
 pub struct State {
     show_archived: bool,
+    sel: Option<usize>,
     memo: Memo<(u64, Date), Rc<Data>>,
 }
 
@@ -79,6 +80,76 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let shown = app.shown_at;
     let mut acts = Vec::new();
 
+    // Keyboard: arrows move across the account grid (3 wide), Enter opens
+    // its transactions, E edits.
+    let groups: [(&str, &[AccountKind]); 3] = [
+        (
+            "Cash & bank",
+            &[AccountKind::Checking, AccountKind::Savings, AccountKind::Cash],
+        ),
+        ("Credit cards", &[AccountKind::Credit]),
+        ("Investments", &[AccountKind::Investment]),
+    ];
+    let order: Vec<RowId> = groups
+        .iter()
+        .flat_map(|(_, kinds)| {
+            store
+                .accounts()
+                .iter()
+                .filter(|a| kinds.contains(&a.kind) && !a.archived)
+                .map(|a| a.id)
+        })
+        .collect();
+    let keys = app.keys;
+    let mut moved = false;
+    if !order.is_empty() {
+        let last = order.len() - 1;
+        let cur = app.accounts.sel;
+        let next = if keys.right {
+            Some(cur.map_or(0, |i| (i + 1).min(last)))
+        } else if keys.left {
+            Some(cur.map_or(0, |i| i.saturating_sub(1)))
+        } else if keys.down {
+            Some(cur.map_or(0, |i| (i + 3).min(last)))
+        } else if keys.up {
+            Some(cur.map_or(0, |i| i.saturating_sub(3)))
+        } else {
+            None
+        };
+        if next.is_some() {
+            app.accounts.sel = next;
+            moved = true;
+        }
+        if let Some(id) = app.accounts.sel.and_then(|i| order.get(i)) {
+            if keys.enter {
+                acts.push(Act::Open(*id));
+            }
+            if keys.edit {
+                acts.push(Act::Edit(*id));
+            }
+        }
+    }
+    let selected_id = app.accounts.sel.and_then(|i| order.get(i)).copied();
+
+    ui.horizontal(|ui| {
+        ui.label(w::subtle(&t, "Everything you own and owe, in one place."));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if w::primary(ui, &t, Some(ph::PLUS), "Account")
+                .on_hover_text(concat!("New account (", shortcut!("Shift A"), ")"))
+                .clicked()
+            {
+                acts.push(Act::New);
+            }
+            if w::secondary(ui, &t, Some(ph::ARROWS_LEFT_RIGHT), "Transfer")
+                .on_hover_text(concat!("Move money between accounts (", shortcut!("T"), ")"))
+                .clicked()
+            {
+                acts.push(Act::Transfer);
+            }
+        });
+    });
+    ui.add_space(12.0);
+
     w::grid_row(ui, 118.0, &[1.0, 1.0, 1.0], |i, ui, rect| {
         w::with_reveal(ui, shown, i, rect, |ui, rect| {
             w::card_in(ui, &t, rect, |ui| {
@@ -90,14 +161,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 ui.label(w::faint(&t, label));
                 w::animated_amount(ui, Id::new(("acc-kpi", i)), v, base, theme::display(26.0), c);
                 if i == 0 {
-                    ui.horizontal(|ui| {
-                        if w::secondary(ui, &t, Some(ph::PLUS), "Account").clicked() {
-                            acts.push(Act::New);
-                        }
-                        if w::ghost(ui, &t, Some(ph::ARROWS_LEFT_RIGHT), "Transfer").clicked() {
-                            acts.push(Act::Transfer);
-                        }
-                    });
+                    ui.label(w::faint(&t, format!("across {} accounts", order.len())));
                 } else {
                     let total = (d.assets + d.debts).max(1);
                     let frac = v as f32 / total as f32;
@@ -107,14 +171,6 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         })
     });
 
-    let groups: [(&str, &[AccountKind]); 3] = [
-        (
-            "Cash & bank",
-            &[AccountKind::Checking, AccountKind::Savings, AccountKind::Cash],
-        ),
-        ("Credit cards", &[AccountKind::Credit]),
-        ("Investments", &[AccountKind::Investment]),
-    ];
     let mut idx = 3;
     for (title, kinds) in groups {
         let accs: Vec<&Account> = store
@@ -139,7 +195,8 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 if let Some(a) = chunk.get(i) {
                     idx += 1;
                     w::with_reveal(ui, shown, idx, rect, |ui, rect| {
-                        account_card(ui, &t, store, a, &d, rect, &mut acts)
+                        let sel = selected_id == Some(a.id);
+                        account_card(ui, &t, store, a, &d, rect, &mut acts, sel, sel && moved)
                     });
                 }
             });
@@ -163,7 +220,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     if let Some(a) = chunk.get(i) {
                         let mut c = ui.new_child(egui::UiBuilder::new().max_rect(ui.max_rect()));
                         c.set_opacity(0.6);
-                        account_card(&mut c, &t, store, a, &d, rect, &mut acts);
+                        account_card(&mut c, &t, store, a, &d, rect, &mut acts, false, false);
                     }
                 });
             }
@@ -204,9 +261,28 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     }
 }
 
-fn account_card(ui: &mut Ui, t: &Theme, store: &Store, a: &Account, d: &Data, rect: Rect, acts: &mut Vec<Act>) {
+#[allow(clippy::too_many_arguments)]
+fn account_card(
+    ui: &mut Ui,
+    t: &Theme,
+    store: &Store,
+    a: &Account,
+    d: &Data,
+    rect: Rect,
+    acts: &mut Vec<Act>,
+    selected: bool,
+    scroll_into_view: bool,
+) {
     let resp = ui.interact(rect, Id::new(("acc-card", a.id)), Sense::click());
-    let h = motion::toggle(ui.ctx(), Id::new(("acc-h", a.id)), resp.hovered(), motion::MICRO);
+    if scroll_into_view {
+        ui.scroll_to_rect(rect, None);
+    }
+    let h = motion::toggle(
+        ui.ctx(),
+        Id::new(("acc-h", a.id)),
+        resp.hovered() || selected,
+        motion::MICRO,
+    );
     let lift = rect.translate(vec2(0.0, -2.0 * h));
     let color = w::cat_color(a.color);
     w::card_in(ui, t, lift, |ui| {

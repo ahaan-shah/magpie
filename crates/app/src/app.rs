@@ -64,6 +64,23 @@ impl Page {
     }
 }
 
+/// Arrow/Enter/Delete presses this frame, for pages with keyboard
+/// selection. Only filled when no text field, modal or palette has focus.
+#[derive(Clone, Copy, Default)]
+pub struct NavKeys {
+    pub up: bool,
+    pub down: bool,
+    pub left: bool,
+    pub right: bool,
+    pub enter: bool,
+    pub edit: bool,
+    pub delete: bool,
+    pub page_up: bool,
+    pub page_down: bool,
+    pub home: bool,
+    pub end: bool,
+}
+
 type FxResult = Result<(Vec<(Cur, f64)>, String), String>;
 
 pub struct App {
@@ -92,6 +109,7 @@ pub struct App {
     fx_rx: Option<mpsc::Receiver<FxResult>>,
     pub fx_busy: bool,
     tour: Option<crate::tour::Tour>,
+    pub keys: NavKeys,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -103,9 +121,13 @@ struct Persisted {
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, mut store: Store) -> App {
         theme::install_fonts(&cc.egui_ctx);
-        if let Some(z) = std::env::var("MAGPIE_ZOOM").ok().and_then(|z| z.parse::<f32>().ok()) {
-            cc.egui_ctx.set_zoom_factor(z.clamp(0.5, 3.0));
-        }
+        // Magpie owns zoom (so it can be saved); turn off egui's own keys.
+        cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
+        let zoom = std::env::var("MAGPIE_ZOOM")
+            .ok()
+            .and_then(|z| z.parse::<f32>().ok())
+            .unwrap_or(store.settings().ui_scale);
+        cc.egui_ctx.set_zoom_factor(zoom.clamp(0.5, 3.0));
         let theme = ThemeState::new(&cc.egui_ctx, &store.settings().theme);
         let persisted: Option<Persisted> = cc.storage.and_then(|s| eframe::get_value(s, "magpie"));
         let today = magpie_core::today();
@@ -144,6 +166,7 @@ impl App {
             fx_rx: None,
             fx_busy: false,
             tour: crate::tour::Tour::from_env(),
+            keys: NavKeys::default(),
             store,
         };
         app.maybe_refresh_fx(&cc.egui_ctx, false);
@@ -176,6 +199,16 @@ impl App {
         if let Err(e) = self.store.update_settings(|s| s.theme = n) {
             self.toasts.error(e.to_string());
         }
+    }
+
+    /// Sets and remembers the interface zoom (1.0 = 100%).
+    pub fn set_ui_scale(&mut self, ctx: &egui::Context, scale: f32) {
+        let scale = (scale * 20.0).round() / 20.0;
+        let scale = scale.clamp(0.7, 2.0);
+        ctx.set_zoom_factor(scale);
+        crate::diag::crumb(format!("ui scale {scale}"));
+        let r = self.store.update_settings(|s| s.ui_scale = scale);
+        self.toasts.ok(r);
     }
 
     pub fn undo(&mut self) {
@@ -264,31 +297,45 @@ impl App {
     }
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
+        use magpie_core::io::Format;
         let cmd = Modifiers::COMMAND;
-        let pressed = |ctx: &egui::Context, m: Modifiers, k: Key| ctx.input_mut(|i| i.consume_key(m, k));
-        if pressed(ctx, cmd, Key::K) {
+        let alt = Modifiers::ALT;
+        let shift = Modifiers::SHIFT;
+        let pressed = |m: Modifiers, k: Key| ctx.input_mut(|i| i.consume_key(m, k));
+        self.keys = NavKeys::default();
+
+        // Zoom works everywhere, even over modals.
+        if pressed(cmd, Key::Plus) || pressed(cmd, Key::Equals) || pressed(cmd | shift, Key::Equals) {
+            let z = ctx.zoom_factor() + 0.1;
+            self.set_ui_scale(ctx, z);
+        }
+        if pressed(cmd, Key::Minus) {
+            let z = ctx.zoom_factor() - 0.1;
+            self.set_ui_scale(ctx, z);
+        }
+        if pressed(cmd, Key::Num0) {
+            self.set_ui_scale(ctx, 1.0);
+        }
+        if pressed(cmd, Key::K) {
             self.palette.toggle(ctx);
         }
         if self.modal.is_some() || self.palette.open {
             return;
         }
-        if pressed(ctx, cmd, Key::N) {
-            let m = forms::TxnForm::new(&self.store, self.today);
-            self.open_modal(ctx, Modal::Txn(m));
-        }
-        if pressed(ctx, cmd | Modifiers::SHIFT, Key::Z) || pressed(ctx, cmd, Key::Y) {
-            self.redo();
-        } else if pressed(ctx, cmd, Key::Z) {
-            self.undo();
-        }
-        if pressed(ctx, cmd, Key::F) {
-            self.go(ctx, Page::Ledger);
-            self.ledger.focus_search = true;
-        }
-        if pressed(ctx, cmd, Key::Comma) {
-            self.go(ctx, Page::Settings);
-        }
-        let keys = [
+        let typing = ctx.memory(|m| m.focused().is_some());
+
+        // Pages: Ctrl/Alt + 1–8, Alt + ↑/↓ and Ctrl + (Shift +) Tab to step.
+        let pages = [
+            Page::Dashboard,
+            Page::Ledger,
+            Page::Budgets,
+            Page::Reports,
+            Page::Accounts,
+            Page::Recurring,
+            Page::Goals,
+            Page::Settings,
+        ];
+        let nums = [
             Key::Num1,
             Key::Num2,
             Key::Num3,
@@ -296,11 +343,97 @@ impl App {
             Key::Num5,
             Key::Num6,
             Key::Num7,
+            Key::Num8,
         ];
-        for (k, p) in keys.iter().zip(Page::NAV) {
-            if pressed(ctx, cmd, *k) {
+        for (k, p) in nums.iter().zip(pages) {
+            if pressed(cmd, *k) || pressed(alt, *k) {
                 self.go(ctx, p);
             }
+        }
+        let idx = pages.iter().position(|p| *p == self.page).unwrap_or(0);
+        if pressed(alt, Key::ArrowDown) || pressed(cmd, Key::Tab) || pressed(cmd, Key::PageDown) {
+            self.go(ctx, pages[(idx + 1) % pages.len()]);
+        }
+        if pressed(alt, Key::ArrowUp) || pressed(cmd | shift, Key::Tab) || pressed(cmd, Key::PageUp) {
+            self.go(ctx, pages[(idx + pages.len() - 1) % pages.len()]);
+        }
+
+        // Actions
+        if pressed(cmd, Key::N) {
+            let m = forms::TxnForm::new(&self.store, self.today);
+            self.open_modal(ctx, Modal::Txn(m));
+        }
+        if pressed(cmd, Key::T) {
+            let m = forms::TxnForm::transfer(&self.store, self.today);
+            self.open_modal(ctx, Modal::Txn(m));
+        }
+        if pressed(cmd | shift, Key::A) {
+            let m = forms::AccountForm::new(&self.store);
+            self.open_modal(ctx, Modal::Account(m));
+        }
+        if pressed(cmd, Key::G) {
+            let m = forms::GoalForm::new(&self.store, self.today);
+            self.open_modal(ctx, Modal::Goal(m));
+        }
+        if pressed(cmd, Key::R) {
+            let m = forms::RuleForm::new(&self.store, self.today);
+            self.open_modal(ctx, Modal::Rule(m));
+        }
+        if pressed(cmd, Key::I) {
+            self.dialogs.pick(
+                ctx,
+                crate::dialogs::Purpose::ImportCsv,
+                "Import transactions",
+                ("CSV", &["csv"]),
+            );
+        }
+        if pressed(cmd, Key::E) {
+            views::settings::export_all(self, Format::Csv);
+        }
+        if pressed(cmd | shift, Key::Z) || pressed(cmd, Key::Y) {
+            self.redo();
+        } else if pressed(cmd, Key::Z) {
+            self.undo();
+        }
+        if pressed(cmd, Key::F) {
+            self.go(ctx, Page::Ledger);
+            self.ledger.focus_search = true;
+        }
+        if pressed(cmd, Key::Comma) {
+            self.go(ctx, Page::Settings);
+        }
+        if pressed(cmd, Key::B) || pressed(cmd, Key::Backslash) {
+            self.collapsed = !self.collapsed;
+        }
+        if pressed(cmd | shift, Key::L) {
+            let name = if self.t().dark { "Daylight" } else { "Midnight" };
+            self.set_theme(ctx, name);
+        }
+        if !typing
+            && (ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::F1))
+                || ctx.input_mut(|i| {
+                    i.consume_key(shift, Key::Slash) || i.consume_key(Modifiers::NONE, Key::Questionmark)
+                }))
+        {
+            self.open_modal(ctx, Modal::Help);
+        }
+
+        // Plain keys for in-page navigation (not while typing).
+        if !typing {
+            let none = Modifiers::NONE;
+            self.keys = NavKeys {
+                up: pressed(none, Key::ArrowUp) || pressed(none, Key::K),
+                down: pressed(none, Key::ArrowDown) || pressed(none, Key::J),
+                left: pressed(none, Key::ArrowLeft) || pressed(none, Key::H),
+                right: pressed(none, Key::ArrowRight) || pressed(none, Key::L),
+                enter: pressed(none, Key::Enter) || pressed(none, Key::Space),
+                edit: pressed(none, Key::E),
+                delete: pressed(none, Key::Delete),
+                page_up: pressed(none, Key::PageUp),
+                page_down: pressed(none, Key::PageDown),
+                home: pressed(none, Key::Home),
+                end: pressed(none, Key::End),
+            };
         }
     }
 
@@ -434,10 +567,14 @@ impl App {
                 ui.add_space(2.0);
                 ui.label(
                     egui::RichText::new(self.page.title())
-                        .font(theme::display(26.0))
+                        .font(theme::display(32.0))
                         .color(t.text),
                 );
-                ui.label(widgets::subtle(&t, long_date(self.today)));
+                ui.label(
+                    egui::RichText::new(long_date(self.today))
+                        .font(theme::medium(15.5))
+                        .color(t.text2),
+                );
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if widgets::primary(ui, &t, Some(ph::PLUS), "Add")
@@ -481,11 +618,52 @@ impl App {
                 match self.page {
                     Page::Ledger => views::ledger::show(self, &mut ui),
                     page => {
+                        // The scroll area reaches the window edge so its bar sits
+                        // in the margin, well clear of the content.
+                        let content_w = inner.width();
+                        let top = ui.cursor().top();
+                        let scroll_rect =
+                            Rect::from_min_max(pos2(inner.left(), top), pos2(full.right() - 6.0, full.bottom()));
+                        let mut sui = ui.new_child(
+                            egui::UiBuilder::new()
+                                .max_rect(scroll_rect)
+                                .layout(egui::Layout::top_down(egui::Align::Min)),
+                        );
+                        let keys = self.keys;
                         egui::ScrollArea::vertical()
                             .id_salt(("page", page as u8))
                             .auto_shrink([false, false])
-                            .show(&mut ui, |ui| {
-                                ui.set_max_width(ui.available_width() - 10.0);
+                            .show(&mut sui, |ui| {
+                                ui.set_max_width(content_w);
+                                let step = ui.clip_rect().height() * 0.85;
+                                let mut dy = 0.0;
+                                if keys.page_down {
+                                    dy -= step;
+                                }
+                                if keys.page_up {
+                                    dy += step;
+                                }
+                                if keys.home {
+                                    dy += 1e7;
+                                }
+                                if keys.end {
+                                    dy -= 1e7;
+                                }
+                                // Pages without list selection scroll with the arrows.
+                                if matches!(page, Page::Dashboard | Page::Reports | Page::Settings) {
+                                    if keys.down {
+                                        dy -= 80.0;
+                                    }
+                                    if keys.up {
+                                        dy += 80.0;
+                                    }
+                                }
+                                if dy != 0.0 {
+                                    ui.scroll_with_delta_animation(
+                                        vec2(0.0, dy),
+                                        egui::style::ScrollAnimation::duration(0.18),
+                                    );
+                                }
                                 match page {
                                     Page::Dashboard => views::dashboard::show(self, ui),
                                     Page::Budgets => views::budgets::show(self, ui),
@@ -679,12 +857,22 @@ fn nav_item(ui: &mut Ui, t: &Theme, page: Page, active: bool, collapse: f32, h: 
             motion::with_alpha(fg, a),
         );
     }
-    let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
-    if collapse > 0.5 {
-        resp.on_hover_text(page.title())
-    } else {
-        resp
-    }
+    let n = match page {
+        Page::Dashboard => 1,
+        Page::Ledger => 2,
+        Page::Budgets => 3,
+        Page::Reports => 4,
+        Page::Accounts => 5,
+        Page::Recurring => 6,
+        Page::Goals => 7,
+        Page::Settings => 8,
+    };
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+        .on_hover_text(format!(
+            "{}   ·   {} {n}  or  Alt {n}",
+            page.title(),
+            if cfg!(target_os = "macos") { "Cmd" } else { "Ctrl" }
+        ))
 }
 
 /// The Magpie mark: a rounded tile with an accent gradient and a bird.

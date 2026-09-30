@@ -86,6 +86,12 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let today = app.today;
     let base = app.store.base();
     ui.horizontal(|ui| {
+        if app.keys.left {
+            app.reports.range = app.reports.range.saturating_sub(1);
+        }
+        if app.keys.right {
+            app.reports.range = (app.reports.range + 1).min(RANGES.len() - 1);
+        }
         w::segmented(ui, &t, Id::new("reports-range"), &mut app.reports.range, &RANGES);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if w::ghost(ui, &t, Some(ph::DOWNLOAD_SIMPLE), "Export summary")
@@ -214,10 +220,11 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     });
 
     // Category table + payees
-    let rows_h = 56.0 + d.cats.len().max(d.payees.len()).max(3) as f32 * 38.0;
+    // Rows are 38pt plus 8pt item spacing; add the card's padding and header.
+    let rows_h = 96.0 + d.cats.len().max(d.payees.len()).max(3) as f32 * 46.0;
     w::grid_row(ui, rows_h, &[1.6, 1.0], |i, ui, rect| {
         w::with_reveal(ui, shown, 7 + i, rect, |ui, rect| {
-            w::card_in(ui, &t, rect, |ui| {
+            w::card_scroll(ui, &t, ("reports-lists", i), rect, |ui| {
                 if i == 0 {
                     category_table(ui, &t, store, &d, base, n);
                 } else {

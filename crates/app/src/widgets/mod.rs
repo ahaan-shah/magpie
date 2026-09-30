@@ -46,6 +46,36 @@ pub fn card_in<R>(ui: &mut Ui, t: &Theme, rect: Rect, add: impl FnOnce(&mut Ui) 
     add(&mut child)
 }
 
+/// A card that fills `rect` and scrolls its content when it doesn't fit.
+/// The scrollbar sits in the card's right padding, clear of the content.
+pub fn card_scroll<R>(
+    ui: &mut Ui,
+    t: &Theme,
+    id_salt: impl std::hash::Hash + std::fmt::Debug,
+    rect: Rect,
+    add: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    let frame = card_frame(t);
+    let inner = rect - frame.total_margin();
+    ui.painter().add(frame.paint(inner));
+    let scroll_rect = Rect::from_min_max(inner.min, egui::pos2(rect.right() - 5.0, inner.bottom()));
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(scroll_rect)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+    );
+    child.set_clip_rect(rect.intersect(ui.clip_rect()));
+    let content_w = inner.width();
+    egui::ScrollArea::vertical()
+        .id_salt(Id::new(("card-scroll", id_salt)))
+        .auto_shrink([false, false])
+        .show(&mut child, |ui| {
+            ui.set_max_width(content_w);
+            add(ui)
+        })
+        .inner
+}
+
 /// Card title row: title on the left, optional right-hand content.
 pub fn card_header(ui: &mut Ui, t: &Theme, title: &str, right: impl FnOnce(&mut Ui)) {
     ui.horizontal(|ui| {
@@ -355,7 +385,7 @@ pub fn segmented(ui: &mut Ui, t: &Theme, id: Id, selected: &mut usize, options: 
         rects.push(r);
         x += w;
     }
-    let sel = (*selected).min(rects.len().saturating_sub(1));
+    let sel = *selected;
     if let Some(target) = rects.get(sel) {
         let l = motion::tween(ui.ctx(), id.with("l"), target.left(), motion::STANDARD);
         let r = motion::tween(ui.ctx(), id.with("r"), target.right(), motion::STANDARD);

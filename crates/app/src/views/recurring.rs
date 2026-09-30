@@ -24,6 +24,22 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let shown = app.shown_at;
     let mut acts = Vec::new();
 
+    ui.horizontal(|ui| {
+        ui.label(w::subtle(
+            &t,
+            "Bills, subscriptions and income that repeat. Magpie posts them for you.",
+        ));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if w::primary(ui, &t, Some(ph::PLUS), "New recurring")
+                .on_hover_text(concat!("New recurring (", shortcut!("R"), ")"))
+                .clicked()
+            {
+                acts.push(Act::New);
+            }
+        });
+    });
+    ui.add_space(12.0);
+
     let active: Vec<&RecurringRule> = store.rules().iter().filter(|r| r.active).collect();
     let monthly = |r: &&RecurringRule| store.to_base(recurring::monthly_equivalent(r), store.account_cur(r.account));
     let bills: i64 = -active.iter().filter(|r| r.amount < 0).map(monthly).sum::<i64>();
@@ -51,9 +67,15 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                             .font(theme::display(24.0))
                             .color(t.text),
                     );
-                    if w::secondary(ui, &t, Some(ph::PLUS), "New recurring").clicked() {
-                        acts.push(Act::New);
-                    }
+                    let paused = store.rules().len() - active.len();
+                    ui.label(w::faint(
+                        &t,
+                        if paused > 0 {
+                            format!("{paused} paused")
+                        } else {
+                            "all running".into()
+                        },
+                    ));
                 }
             })
         })
@@ -94,9 +116,31 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let mut rules: Vec<&RecurringRule> = store.rules().iter().collect();
     rules.sort_by_key(|r| (!r.active, recurring::next_due(r)));
     let list_h = (84.0 + rules.len().max(2) as f32 * 66.0).max(360.0);
+    // Keyboard: ↑ ↓ select a rule, Enter / E edit it.
+    let sel_id = egui::Id::new("recurring-sel");
+    let mut sel: Option<usize> = ui.data(|d| d.get_temp(sel_id));
+    let keys = app.keys;
+    let mut moved = false;
+    if !rules.is_empty() {
+        let last = rules.len() - 1;
+        if keys.down {
+            sel = Some(sel.map_or(0, |i| (i + 1).min(last)));
+            moved = true;
+        }
+        if keys.up {
+            sel = Some(sel.map_or(0, |i| i.saturating_sub(1)));
+            moved = true;
+        }
+        if (keys.enter || keys.edit)
+            && let Some(r) = sel.and_then(|i| rules.get(i))
+        {
+            acts.push(Act::Edit(r.id));
+        }
+    }
+    ui.data_mut(|d| d.insert_temp(sel_id, sel));
     w::grid_row(ui, list_h, &[1.5, 1.0], |i, ui, rect| {
         w::with_reveal(ui, shown, 3 + i, rect, |ui, rect| {
-            w::card_in(ui, &t, rect, |ui| {
+            w::card_scroll(ui, &t, ("recurring-lists", i), rect, |ui| {
                 if i == 0 {
                     w::card_header(ui, &t, "All recurring", |_| {});
                     if rules.is_empty() {
@@ -108,8 +152,12 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                             "Add rent, salary or subscriptions and Magpie will post them for you.",
                         );
                     }
-                    for r in &rules {
-                        if rule_row(ui, &t, store, r, today).clicked() {
+                    for (i, r) in rules.iter().enumerate() {
+                        let resp = rule_row(ui, &t, store, r, today, sel == Some(i));
+                        if sel == Some(i) && moved {
+                            ui.scroll_to_rect(resp.rect, None);
+                        }
+                        if resp.clicked() {
                             acts.push(Act::Edit(r.id));
                         }
                     }
@@ -147,10 +195,30 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     }
 }
 
-fn rule_row(ui: &mut Ui, t: &Theme, store: &Store, r: &RecurringRule, today: jiff::civil::Date) -> egui::Response {
+fn rule_row(
+    ui: &mut Ui,
+    t: &Theme,
+    store: &Store,
+    r: &RecurringRule,
+    today: jiff::civil::Date,
+    selected: bool,
+) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 58.0), Sense::click());
-    let h = motion::toggle(ui.ctx(), Id::new(("rule-row", r.id)), resp.hovered(), motion::MICRO);
+    let h = motion::toggle(
+        ui.ctx(),
+        Id::new(("rule-row", r.id)),
+        resp.hovered() || selected,
+        motion::MICRO,
+    );
     let p = ui.painter();
+    if selected {
+        p.rect_stroke(
+            rect.expand2(vec2(8.0, 0.0)),
+            CornerRadius::same(10),
+            egui::Stroke::new(1.5, t.accent),
+            egui::StrokeKind::Inside,
+        );
+    }
     if h > 0.0 {
         p.rect_filled(
             rect.expand2(vec2(8.0, 0.0)),

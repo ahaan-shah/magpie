@@ -17,6 +17,7 @@ type Goals = Rc<Vec<(Goal, GoalStatus)>>;
 #[derive(Default)]
 pub struct State {
     show_archived: bool,
+    sel: Option<usize>,
     memo: Memo<(u64, Date), Goals>,
 }
 
@@ -89,11 +90,51 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             });
         });
     }
+    // Keyboard: arrows move across the grid, Enter adds money (or edits an
+    // account-linked goal), E edits.
+    let keys = app.keys;
+    let mut moved = false;
+    if !active.is_empty() {
+        let last = active.len() - 1;
+        let cur = app.goals.sel;
+        let next = if keys.right {
+            Some(cur.map_or(0, |i| (i + 1).min(last)))
+        } else if keys.left {
+            Some(cur.map_or(0, |i| i.saturating_sub(1)))
+        } else if keys.down {
+            Some(cur.map_or(0, |i| (i + 3).min(last)))
+        } else if keys.up {
+            Some(cur.map_or(0, |i| i.saturating_sub(3)))
+        } else {
+            None
+        };
+        if next.is_some() {
+            app.goals.sel = next;
+            moved = true;
+        }
+        if let Some((g, _)) = app.goals.sel.and_then(|i| active.get(i)) {
+            if keys.enter {
+                acts.push(if g.account.is_none() {
+                    Act::Add(g.id)
+                } else {
+                    Act::Edit(g.id)
+                });
+            }
+            if keys.edit {
+                acts.push(Act::Edit(g.id));
+            }
+        }
+    }
+    let sel = app.goals.sel;
     for (row, chunk) in active.chunks(3).enumerate() {
         w::grid_row(ui, 250.0, &[1.0, 1.0, 1.0], |i, ui, rect| {
             if let Some((g, s)) = chunk.get(i) {
+                let selected = sel == Some(row * 3 + i);
+                if selected && moved {
+                    ui.scroll_to_rect(rect, None);
+                }
                 w::with_reveal(ui, shown, row * 3 + i, rect, |ui, rect| {
-                    goal_card(ui, &t, store, g, s, today, rect, &mut acts)
+                    goal_card(ui, &t, store, g, s, today, rect, &mut acts, selected)
                 });
             }
         });
@@ -113,7 +154,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     if let Some((g, s)) = chunk.get(i) {
                         let mut c = ui.new_child(egui::UiBuilder::new().max_rect(ui.max_rect()));
                         c.set_opacity(0.55);
-                        goal_card(&mut c, &t, store, g, s, today, rect, &mut acts);
+                        goal_card(&mut c, &t, store, g, s, today, rect, &mut acts, false);
                     }
                 });
             }
@@ -151,10 +192,16 @@ fn goal_card(
     today: Date,
     rect: Rect,
     acts: &mut Vec<Act>,
+    selected: bool,
 ) {
     let color = w::cat_color(g.color);
     let resp = ui.interact(rect, Id::new(("goal-card", g.id)), Sense::hover());
-    let h = motion::toggle(ui.ctx(), Id::new(("goal-h", g.id)), resp.hovered(), motion::MICRO);
+    let h = motion::toggle(
+        ui.ctx(),
+        Id::new(("goal-h", g.id)),
+        resp.hovered() || selected,
+        motion::MICRO,
+    );
     let rect = rect.translate(vec2(0.0, -2.0 * h));
     w::card_in(ui, t, rect, |ui| {
         if h > 0.0 {

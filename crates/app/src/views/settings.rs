@@ -18,6 +18,7 @@ pub struct State {
 
 enum Act {
     Theme(&'static str),
+    Scale(f32),
     Base(Cur),
     FxAuto(bool),
     RefreshFx,
@@ -62,11 +63,19 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let mut acts = Vec::new();
     let current_theme = app.theme.target_name();
 
+    let zoom = ui.ctx().zoom_factor();
+    // ← / → cycle themes on this page.
+    if app.keys.left || app.keys.right {
+        let i = THEMES.iter().position(|x| x.name == current_theme).unwrap_or(0);
+        let n = THEMES.len();
+        let j = if app.keys.right { (i + 1) % n } else { (i + n - 1) % n };
+        acts.push(Act::Theme(THEMES[j].name));
+    }
     section(
         ui,
         &t,
         "Appearance",
-        "Pick a look. Switching crossfades smoothly.",
+        "Pick a look (← → to flip through). Switching crossfades smoothly.",
         |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = vec2(12.0, 12.0);
@@ -74,6 +83,57 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     if theme_tile(ui, &t, th, th.name == current_theme).clicked() {
                         acts.push(Act::Theme(th.name));
                     }
+                }
+            });
+            ui.add_space(18.0);
+            ui.label(
+                egui::RichText::new("Interface size")
+                    .font(theme::semibold(14.0))
+                    .color(t.text),
+            );
+            ui.label(w::subtle(
+                &t,
+                concat!(
+                    "Scales text and everything else together. Also ",
+                    shortcut!("+"),
+                    " / ",
+                    shortcut!("−"),
+                    " / ",
+                    shortcut!("0"),
+                    "."
+                ),
+            ));
+            ui.add_space(8.0);
+            ui.horizontal_wrapped(|ui| {
+                const PRESETS: [(f32, &str); 6] = [
+                    (0.85, "Compact"),
+                    (1.0, "Default"),
+                    (1.1, "Comfortable"),
+                    (1.25, "Large"),
+                    (1.4, "Larger"),
+                    (1.6, "Huge"),
+                ];
+                let labels: Vec<&str> = PRESETS.iter().map(|p| p.1).collect();
+                let mut sel = PRESETS
+                    .iter()
+                    .position(|p| (p.0 - zoom).abs() < 0.02)
+                    .unwrap_or(usize::MAX);
+                let before = sel;
+                w::segmented(ui, &t, egui::Id::new("ui-scale"), &mut sel, &labels);
+                if sel != before && sel < PRESETS.len() {
+                    acts.push(Act::Scale(PRESETS[sel].0));
+                }
+                ui.add_space(8.0);
+                if w::icon_button(ui, &t, ph::MINUS, "Smaller").clicked() {
+                    acts.push(Act::Scale(zoom - 0.05));
+                }
+                ui.label(
+                    egui::RichText::new(format!("{:.0}%", zoom * 100.0))
+                        .font(theme::semibold(13.5))
+                        .color(t.text),
+                );
+                if w::icon_button(ui, &t, ph::PLUS, "Bigger").clicked() {
+                    acts.push(Act::Scale(zoom + 0.05));
                 }
             });
         },
@@ -182,7 +242,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         "Categories",
         "Colours and icons show up everywhere — charts, budgets and the ledger.",
         |ui| {
-            let wdt = (ui.available_width() - 24.0) / 2.0;
+            let wdt = (ui.available_width() - 24.0 - 2.0 * ui.spacing().item_spacing.x) / 2.0;
             ui.horizontal_top(|ui| {
                 for kind in [CategoryKind::Expense, CategoryKind::Income] {
                     ui.allocate_ui_with_layout(vec2(wdt, 0.0), egui::Layout::top_down(egui::Align::Min), |ui| {
@@ -240,7 +300,9 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                             }
                         }
                     });
-                    ui.add_space(24.0);
+                    if kind == CategoryKind::Expense {
+                        ui.add_space(24.0);
+                    }
                 }
             });
         },
@@ -295,37 +357,8 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         },
     );
 
-    section(ui, &t, "Keyboard", "", |ui| {
-        let keys = [
-            (shortcut!("K"), "Command palette — jump anywhere, run anything"),
-            (shortcut!("N"), "New transaction"),
-            (shortcut!("F"), "Search transactions"),
-            (concat!(shortcut!("Z"), " / ", shortcut!("Shift Z")), "Undo / redo"),
-            (shortcut!("1 – 7"), "Switch pages"),
-            ("N or /", "Focus quick add (Transactions)"),
-            ("↑ ↓  J K", "Move selection (Transactions)"),
-            ("Enter · Delete · Esc", "Edit · delete · clear selection"),
-            (concat!(shortcut!("/ Shift"), " click"), "Multi-select"),
-        ];
-        egui::Grid::new("keys")
-            .num_columns(2)
-            .spacing(vec2(24.0, 8.0))
-            .show(ui, |ui| {
-                for (k, d) in keys {
-                    let g = ui.painter().layout_no_wrap(k.to_string(), theme::medium(12.0), t.text);
-                    let (r, _) = ui.allocate_exact_size(vec2(g.size().x + 16.0, 24.0), Sense::hover());
-                    ui.painter().rect(
-                        r,
-                        CornerRadius::same(6),
-                        t.hover,
-                        Stroke::new(1.0, t.border),
-                        egui::StrokeKind::Inside,
-                    );
-                    ui.painter().galley(r.center() - g.size() / 2.0, g, t.text);
-                    ui.label(w::subtle(&t, d));
-                    ui.end_row();
-                }
-            });
+    section(ui, &t, "Keyboard", "Press ? anywhere to see this list.", |ui| {
+        forms::shortcut_table(ui, &t, 2);
     });
 
     section(ui, &t, "About", "", |ui| {
@@ -343,12 +376,8 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     for a in acts {
         match a {
             Act::Theme(name) => app.set_theme(&ctx, name),
-            Act::Base(c) => {
-                if app.toasts.ok(app.store.update_settings(|s| s.base = c)).is_some() {
-                    app.toasts.success(format!("Main currency is now {c}"));
-                    app.maybe_refresh_fx(&ctx, false);
-                }
-            }
+            Act::Base(c) => app.open_modal(&ctx, Modal::Currency(forms::CurrencyForm::new(c))),
+            Act::Scale(z) => app.set_ui_scale(&ctx, z),
             Act::FxAuto(v) => {
                 app.toasts.ok(app.store.update_settings(|s| s.fx_auto = v));
             }

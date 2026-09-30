@@ -1317,19 +1317,28 @@ fn keyboard(app: &mut App, ctx: &egui::Context, rows: &Rows, acts: &mut Vec<Act>
     if app.modal.is_some() || app.palette.open || ctx.memory(|m| m.focused().is_some()) {
         return;
     }
-    let (down, up, enter, del, esc, all) = ctx.input(|i| {
+    let k = app.keys;
+    let (backspace, esc, all) = ctx.input(|i| {
         (
-            i.key_pressed(Key::ArrowDown) || i.key_pressed(Key::J),
-            i.key_pressed(Key::ArrowUp) || i.key_pressed(Key::K),
-            i.key_pressed(Key::Enter),
-            i.key_pressed(Key::Delete) || i.key_pressed(Key::Backspace),
+            i.key_pressed(Key::Backspace),
             i.key_pressed(Key::Escape),
             i.modifiers.command && i.key_pressed(Key::A),
         )
     });
-    if ctx.input(|i| i.key_pressed(Key::N) && !i.modifiers.any()) || ctx.input(|i| i.key_pressed(Key::Slash)) {
+    if ctx.input(|i| (i.key_pressed(Key::N) && !i.modifiers.any()) || i.key_pressed(Key::Slash)) {
         ctx.memory_mut(|m| m.request_focus(Id::new("quick-add")));
         return;
+    }
+    // ← / → step the date filter a month at a time.
+    if k.left || k.right {
+        let now = Month::of(app.today);
+        let cur = match app.ledger.range {
+            Range::Month(m) => m,
+            Range::LastMonth => now.prev(),
+            _ => now,
+        };
+        let next = if k.left { cur.prev() } else { cur.next() };
+        app.ledger.range = if next > now { Range::All } else { Range::Month(next) };
     }
     let st = &mut app.ledger;
     if all {
@@ -1338,24 +1347,37 @@ fn keyboard(app: &mut App, ctx: &egui::Context, rows: &Rows, acts: &mut Vec<Act>
     if esc {
         st.clear_selection();
     }
-    if down || up {
-        let cur = st.anchor.and_then(|a| rows.order.iter().position(|x| *x == a));
-        let next = match (cur, down) {
-            (None, _) => 0,
-            (Some(i), true) => (i + 1).min(rows.order.len().saturating_sub(1)),
-            (Some(i), false) => i.saturating_sub(1),
-        };
-        if let Some(id) = rows.order.get(next) {
-            st.selected.clear();
-            st.selected.insert(*id);
-            st.anchor = Some(*id);
-            st.scroll_to = Some(*id);
-        }
+    let n = rows.order.len();
+    let cur = st.anchor.and_then(|a| rows.order.iter().position(|x| *x == a));
+    let target = if k.down {
+        Some(cur.map(|i| i + 1).unwrap_or(0))
+    } else if k.up {
+        Some(cur.map(|i| i.saturating_sub(1)).unwrap_or(0))
+    } else if k.page_down {
+        Some(cur.map(|i| i + 12).unwrap_or(0))
+    } else if k.page_up {
+        Some(cur.map(|i| i.saturating_sub(12)).unwrap_or(0))
+    } else if k.home {
+        Some(0)
+    } else if k.end {
+        Some(n.saturating_sub(1))
+    } else {
+        None
+    };
+    if let Some(t) = target
+        && let Some(id) = rows.order.get(t.min(n.saturating_sub(1)))
+    {
+        st.selected.clear();
+        st.selected.insert(*id);
+        st.anchor = Some(*id);
+        st.scroll_to = Some(*id);
     }
-    if enter && let Some(id) = st.selected_one() {
+    if (k.enter || k.edit)
+        && let Some(id) = st.selected_one()
+    {
         acts.push(Act::Edit(id));
     }
-    if del && !st.selected.is_empty() {
+    if (k.delete || backspace) && !st.selected.is_empty() {
         acts.push(Act::Delete(st.selected.iter().copied().collect()));
     }
 }

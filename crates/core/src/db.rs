@@ -597,6 +597,14 @@ impl Db {
         Ok(self.conn.last_insert_rowid())
     }
 
+    pub fn update_contribution(&self, c: &Contribution) -> Result<()> {
+        self.conn.execute(
+            "UPDATE contributions SET goal_id=?2, date=?3, amount=?4, note=?5 WHERE id=?1",
+            params![c.id, c.goal, date_str(c.date), c.amount, c.note],
+        )?;
+        Ok(())
+    }
+
     pub fn delete_contribution(&self, id: Id) -> Result<()> {
         self.conn.execute("DELETE FROM contributions WHERE id = ?1", [id])?;
         Ok(())

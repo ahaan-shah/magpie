@@ -255,16 +255,22 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     // Row 4 — budgets + upcoming
     w::grid_row(ui, 316.0, &[1.0, 1.0], |i, ui, rect| {
         w::with_reveal(ui, shown, 8 + i, rect, |ui, rect| match i {
-            0 => w::card_in(ui, &t, rect, |ui| budgets_card(ui, &t, store, &d, &mut acts)),
-            _ => w::card_in(ui, &t, rect, |ui| upcoming_card(ui, &t, store, &d, today, &mut acts)),
+            0 => w::card_scroll(ui, &t, "dash-budgets", rect, |ui| {
+                budgets_card(ui, &t, store, &d, &mut acts)
+            }),
+            _ => w::card_scroll(ui, &t, "dash-upcoming", rect, |ui| {
+                upcoming_card(ui, &t, store, &d, today, &mut acts)
+            }),
         })
     });
 
     // Row 5 — recent + goals
     w::grid_row(ui, 360.0, &[1.3, 1.0], |i, ui, rect| {
         w::with_reveal(ui, shown, 10 + i, rect, |ui, rect| match i {
-            0 => w::card_in(ui, &t, rect, |ui| recent_card(ui, &t, store, &d, today, &mut acts)),
-            _ => w::card_in(ui, &t, rect, |ui| goals_card(ui, &t, &d, &mut acts)),
+            0 => w::card_scroll(ui, &t, "dash-recent", rect, |ui| {
+                recent_card(ui, &t, store, &d, today, &mut acts)
+            }),
+            _ => w::card_scroll(ui, &t, "dash-goals", rect, |ui| goals_card(ui, &t, &d, &mut acts)),
         })
     });
 

@@ -25,6 +25,8 @@ pub enum Modal {
     Category(CategoryForm),
     Import(Box<ImportForm>),
     Confirm(Confirm),
+    Help,
+    Currency(CurrencyForm),
 }
 
 impl Modal {
@@ -38,6 +40,8 @@ impl Modal {
             Modal::Category(_) => "category",
             Modal::Import(_) => "import",
             Modal::Confirm(_) => "confirm",
+            Modal::Help => "help",
+            Modal::Currency(_) => "currency",
         }
     }
 }
@@ -67,6 +71,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     let width = match &modal {
         Modal::Import(_) => 720.0,
         Modal::Confirm(_) => 400.0,
+        Modal::Help => 760.0,
         Modal::Goal(_) | Modal::Rule(_) | Modal::Txn(_) => 520.0,
         _ => 460.0,
     };
@@ -103,6 +108,8 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 Modal::Category(f) => f.ui(app, ui, &t),
                 Modal::Import(f) => f.ui(app, ui, &t),
                 Modal::Confirm(f) => f.ui(app, ui, &t),
+                Modal::Help => help_ui(ui, &t),
+                Modal::Currency(f) => f.ui(app, ui, &t),
             }
         });
     let close = resp.should_close() || resp.inner == Outcome::Close;
@@ -1308,6 +1315,8 @@ impl ContribForm {
 pub struct CategoryForm {
     cat: Category,
     error: Option<String>,
+    /// Create a monthly budget for it right away (opened from Budgets).
+    budget: bool,
 }
 
 impl CategoryForm {
@@ -1322,18 +1331,33 @@ impl CategoryForm {
                 archived: false,
             },
             error: None,
+            budget: false,
         }
     }
     pub fn edit(c: &Category) -> CategoryForm {
         CategoryForm {
             cat: c.clone(),
             error: None,
+            budget: false,
         }
+    }
+    pub fn then_budget(mut self) -> CategoryForm {
+        self.budget = true;
+        self
     }
 
     fn ui(&mut self, app: &mut App, ui: &mut Ui, t: &Theme) -> Outcome {
         let editing = self.cat.id != 0;
-        title(ui, t, if editing { "Edit category" } else { "New category" }, "");
+        title(
+            ui,
+            t,
+            if editing { "Edit category" } else { "New category" },
+            if self.budget {
+                "It gets a monthly budget you can set right after."
+            } else {
+                ""
+            },
+        );
         ui.horizontal(|ui| {
             w::icon_badge(ui, t, icons::glyph(&self.cat.icon), w::cat_color(self.cat.color), 44.0);
             ui.vertical(|ui| {
@@ -1412,8 +1436,23 @@ impl CategoryForm {
             return Outcome::Keep;
         }
         self.cat.name = name;
-        if app.toasts.ok(app.store.save_category(self.cat.clone())).is_some() {
-            app.toasts.success("Category saved");
+        if let Some(id) = app.toasts.ok(app.store.save_category(self.cat.clone())) {
+            if self.budget && self.cat.kind == CategoryKind::Expense {
+                let r = app.store.edit_budgets("Add budget", &[id], |s| {
+                    s.save_budget_plan(magpie_core::BudgetPlan {
+                        category: id,
+                        amount: 0,
+                        rollover: false,
+                    })
+                });
+                if app.toasts.ok(r).is_some() {
+                    app.budgets.edit(id, String::new());
+                    app.toasts
+                        .success(format!("Created “{}” — now set its monthly amount", self.cat.name));
+                }
+            } else {
+                app.toasts.success("Category saved");
+            }
         }
         Outcome::Close
     }
@@ -1686,6 +1725,201 @@ impl Confirm {
                     app.go(&ctx, crate::app::Page::Dashboard);
                 }
             }
+        }
+        Outcome::Close
+    }
+}
+
+// ================================================================ Help
+
+/// Every keyboard shortcut, grouped. Also shown in Settings.
+pub const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
+    (
+        "Move around",
+        &[
+            (concat!(shortcut!("1"), " … 8"), "Go to a page (also Alt 1 … 8)"),
+            ("Alt ↑ / Alt ↓", "Previous / next page"),
+            (concat!(shortcut!("K")), "Command palette"),
+            (concat!(shortcut!("F")), "Search transactions"),
+            (concat!(shortcut!(",")), "Settings"),
+            (concat!(shortcut!("B")), "Collapse sidebar"),
+            ("PgUp · PgDn · Home · End", "Scroll the page"),
+            ("? or F1", "This cheat sheet"),
+        ],
+    ),
+    (
+        "Create",
+        &[
+            (concat!(shortcut!("N")), "New transaction"),
+            (concat!(shortcut!("T")), "New transfer"),
+            (concat!(shortcut!("R")), "New recurring"),
+            (concat!(shortcut!("G")), "New goal"),
+            (concat!(shortcut!("Shift A")), "New account"),
+            (concat!(shortcut!("I")), "Import a CSV"),
+            (concat!(shortcut!("E")), "Export everything as CSV"),
+        ],
+    ),
+    (
+        "Lists (Transactions, Budgets, Accounts, Recurring, Goals)",
+        &[
+            ("↑ ↓ ← →  or  H J K L", "Move the selection"),
+            ("Enter / Space", "Open the selected item"),
+            ("E", "Edit the selected item"),
+            ("Delete", "Delete the selection (Transactions)"),
+            (
+                "← →",
+                "Previous / next month (Transactions, Budgets) or range (Reports)",
+            ),
+            ("N or /", "Quick add (Transactions)"),
+            (concat!(shortcut!("A")), "Select all (Transactions)"),
+            ("Esc", "Clear selection · close dialogs"),
+        ],
+    ),
+    (
+        "Everything else",
+        &[
+            (concat!(shortcut!("Z")), "Undo"),
+            (concat!(shortcut!("Shift Z")), "Redo"),
+            (concat!(shortcut!("+ / −")), "Bigger / smaller interface"),
+            (concat!(shortcut!("0")), "Reset interface size"),
+            (concat!(shortcut!("Shift L")), "Toggle light / dark"),
+            ("Enter", "Save a form"),
+        ],
+    ),
+];
+
+pub fn shortcut_table(ui: &mut Ui, t: &Theme, columns: usize) {
+    // 24pt spacer plus item spacing on both sides of it.
+    let gap = 24.0 + 2.0 * ui.spacing().item_spacing.x;
+    let col_w = (ui.available_width() - gap * (columns as f32 - 1.0)) / columns as f32;
+    for row in SHORTCUTS.chunks(columns) {
+        ui.horizontal_top(|ui| {
+            for (ci, (title, keys)) in row.iter().enumerate() {
+                ui.allocate_ui_with_layout(vec2(col_w, 0.0), egui::Layout::top_down(egui::Align::Min), |ui| {
+                    ui.set_min_width(col_w);
+                    ui.set_max_width(col_w);
+                    ui.label(w::faint(t, title.to_uppercase()));
+                    ui.add_space(4.0);
+                    for (k, d) in keys.iter() {
+                        ui.horizontal(|ui| {
+                            let g = ui.painter().layout_no_wrap(k.to_string(), theme::medium(11.5), t.text);
+                            let kw = g.size().x + 14.0;
+                            let (r, _) = ui.allocate_exact_size(vec2(kw.max(28.0), 22.0), egui::Sense::hover());
+                            ui.painter().rect(
+                                r,
+                                CornerRadius::same(6),
+                                t.hover,
+                                Stroke::new(1.0, t.border),
+                                egui::StrokeKind::Inside,
+                            );
+                            ui.painter().galley(r.center() - g.size() / 2.0, g, t.text);
+                            ui.label(egui::RichText::new(*d).font(theme::regular(12.5)).color(t.text2));
+                        });
+                    }
+                });
+                if ci + 1 < row.len() {
+                    ui.add_space(24.0);
+                }
+            }
+        });
+        ui.add_space(14.0);
+    }
+}
+
+fn help_ui(ui: &mut Ui, t: &Theme) -> Outcome {
+    title(
+        ui,
+        t,
+        "Keyboard shortcuts",
+        "Magpie can be driven entirely from the keyboard.",
+    );
+    let max_h = ui.ctx().content_rect().height() * 0.62;
+    egui::ScrollArea::vertical()
+        .max_height(max_h)
+        .show(ui, |ui| shortcut_table(ui, t, 2));
+    let (_, cancel) = footer(ui, t, "Got it", |_| {});
+    if cancel || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+        return Outcome::Close;
+    }
+    Outcome::Keep
+}
+
+// ============================================================ Currency
+
+pub struct CurrencyForm {
+    new: Cur,
+    convert_accounts: bool,
+}
+
+impl CurrencyForm {
+    pub fn new(new: Cur) -> CurrencyForm {
+        CurrencyForm {
+            new,
+            convert_accounts: true,
+        }
+    }
+
+    fn ui(&mut self, app: &mut App, ui: &mut Ui, t: &Theme) -> Outcome {
+        let old = app.store.base();
+        let n_acc = app.store.accounts().iter().filter(|a| a.currency == old).count();
+        title(
+            ui,
+            t,
+            &format!("Switch to {}?", self.new),
+            &format!("Your main currency is {old} today."),
+        );
+        let bullet = |ui: &mut Ui, s: String| {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(ph::CHECK).color(t.pos));
+                ui.label(egui::RichText::new(s).color(t.text));
+            });
+        };
+        bullet(ui, format!("Totals, charts and reports will be shown in {}.", self.new));
+        bullet(
+            ui,
+            format!("Budgets and {old} goals are converted to {} at today's rate.", self.new),
+        );
+        ui.add_space(10.0);
+        if n_acc > 0 {
+            w::toggle_row(
+                ui,
+                t,
+                &mut self.convert_accounts,
+                &format!(
+                    "Also convert my {n_acc} {old} account{} to {}",
+                    if n_acc == 1 { "" } else { "s" },
+                    self.new
+                ),
+            );
+            ui.label(w::faint(
+                t,
+                if self.convert_accounts {
+                    "Balances and every transaction in those accounts are converted at today's rate."
+                } else {
+                    "Those accounts stay in their own currency and are converted for totals."
+                },
+            ));
+        }
+        if let Some(r) = app.store.rates.rate(old, self.new) {
+            ui.add_space(6.0);
+            ui.label(w::faint(t, format!("Rate: 1 {old} = {r:.4} {}", self.new)));
+        }
+        let (ok, cancel) = footer(ui, t, &format!("Switch to {}", self.new), |_| {});
+        if cancel {
+            return Outcome::Close;
+        }
+        if !ok {
+            return Outcome::Keep;
+        }
+        if let Some(n) = app.toasts.ok(app.store.change_base(self.new, self.convert_accounts)) {
+            let extra = if n > 0 {
+                format!(" · {n} account{} converted", if n == 1 { "" } else { "s" })
+            } else {
+                String::new()
+            };
+            app.toasts.success(format!("Main currency is now {}{extra}", self.new));
+            let ctx = ui.ctx().clone();
+            app.maybe_refresh_fx(&ctx, false);
         }
         Outcome::Close
     }
