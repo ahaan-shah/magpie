@@ -110,26 +110,37 @@ pub struct App {
     pub fx_busy: bool,
     tour: Option<crate::tour::Tour>,
     pub keys: NavKeys,
+    panics: u32,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-struct Persisted {
+pub(crate) struct Persisted {
     page: Page,
     collapsed: bool,
 }
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, mut store: Store) -> App {
-        theme::install_fonts(&cc.egui_ctx);
+    pub fn new(cc: &eframe::CreationContext<'_>, store: Store) -> App {
+        let persisted: Option<Persisted> = cc.storage.and_then(|s| eframe::get_value(s, "magpie"));
+        App::with_context(&cc.egui_ctx, persisted, store)
+    }
+
+    /// Builds the app against any egui context (the real window, or a
+    /// headless one in tests).
+    pub(crate) fn with_context(ctx: &egui::Context, persisted: Option<Persisted>, mut store: Store) -> App {
+        theme::install_fonts(ctx);
         // Magpie owns zoom (so it can be saved); turn off egui's own keys.
-        cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
+        ctx.options_mut(|o| {
+            o.zoom_with_keyboard = false;
+            // egui's default is 40pt per wheel notch, which feels sluggish.
+            o.input_options.line_scroll_speed = 100.0;
+        });
         let zoom = std::env::var("MAGPIE_ZOOM")
             .ok()
             .and_then(|z| z.parse::<f32>().ok())
             .unwrap_or(store.settings().ui_scale);
-        cc.egui_ctx.set_zoom_factor(zoom.clamp(0.5, 3.0));
-        let theme = ThemeState::new(&cc.egui_ctx, &store.settings().theme);
-        let persisted: Option<Persisted> = cc.storage.and_then(|s| eframe::get_value(s, "magpie"));
+        ctx.set_zoom_factor(zoom.clamp(0.5, 3.0));
+        let theme = ThemeState::new(ctx, &store.settings().theme);
         let today = magpie_core::today();
         let mut toasts = Toasts::default();
         match recurring::post_due(&mut store, today) {
@@ -167,9 +178,10 @@ impl App {
             fx_busy: false,
             tour: crate::tour::Tour::from_env(),
             keys: NavKeys::default(),
+            panics: 0,
             store,
         };
-        app.maybe_refresh_fx(&cc.egui_ctx, false);
+        app.maybe_refresh_fx(ctx, false);
         app
     }
 
@@ -199,6 +211,22 @@ impl App {
         if let Err(e) = self.store.update_settings(|s| s.theme = n) {
             self.toasts.error(e.to_string());
         }
+    }
+
+    /// Called after a frame panicked (already logged by the panic hook).
+    fn recover(&mut self, ctx: &egui::Context) {
+        self.panics += 1;
+        self.modal = None;
+        self.modal_closing = None;
+        self.palette.open = false;
+        self.onboarding = None;
+        if self.panics > 1 {
+            // Something on this page keeps failing; get somewhere safe.
+            self.page = Page::Dashboard;
+        }
+        self.toasts
+            .error("Something went wrong and Magpie recovered. Details were saved to magpie-diagnostics.log.");
+        ctx.request_repaint();
     }
 
     /// Sets and remembers the interface zoom (1.0 = 100%).
@@ -235,7 +263,7 @@ impl App {
     }
 
     pub fn maybe_refresh_fx(&mut self, ctx: &egui::Context, force: bool) {
-        if self.fx_busy {
+        if self.fx_busy || headless() {
             return;
         }
         let s = self.store.settings();
@@ -273,6 +301,13 @@ impl App {
                     Err(e) => self.toasts.error(e.to_string()),
                 },
             }
+        }
+        if let Some(rx) = &self.fx_rx
+            && matches!(rx.try_recv(), Err(mpsc::TryRecvError::Disconnected))
+        {
+            // The fetch thread died without answering; don't stay "busy".
+            self.fx_rx = None;
+            self.fx_busy = false;
         }
         if let Some(rx) = &self.fx_rx
             && let Ok(r) = rx.try_recv()
@@ -630,7 +665,7 @@ impl App {
                                 .layout(egui::Layout::top_down(egui::Align::Min)),
                         );
                         let keys = self.keys;
-                        egui::ScrollArea::vertical()
+                        crate::widgets::scroll_area()
                             .id_salt(("page", page as u8))
                             .auto_shrink([false, false])
                             .show(&mut sui, |ui| {
@@ -745,8 +780,13 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         crate::diag::frame_begin();
-        self.frame(ui);
+        // Crash shield: a bug in one frame must never take the app (and the
+        // user's unsaved typing) down. Log it, reset the view, keep going.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.frame(ui)));
         crate::diag::frame_end();
+        if result.is_err() {
+            self.recover(ui.ctx());
+        }
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
@@ -766,7 +806,7 @@ impl eframe::App for App {
 }
 
 impl App {
-    fn frame(&mut self, ui: &mut Ui) {
+    pub(crate) fn frame(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
         self.theme.tick(&ctx);
         let t = self.t();
@@ -927,6 +967,25 @@ fn search_pill(ui: &mut Ui, t: &Theme) -> egui::Response {
         t.text2,
     );
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// True in tests: no file dialogs, no network, no launching other apps.
+pub fn headless() -> bool {
+    std::env::var_os("MAGPIE_HEADLESS").is_some()
+}
+
+/// Opens a file or folder with the system's default app.
+pub fn open_external(path: &std::path::Path) {
+    if headless() {
+        return;
+    }
+    #[cfg(target_os = "macos")]
+    let cmd = "open";
+    #[cfg(not(target_os = "macos"))]
+    let cmd = "xdg-open";
+    if let Err(e) = std::process::Command::new(cmd).arg(path).spawn() {
+        crate::diag::crumb(format!("couldn't run {cmd}: {e}"));
+    }
 }
 
 pub fn long_date(d: Date) -> String {

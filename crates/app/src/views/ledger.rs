@@ -760,7 +760,7 @@ fn table(app: &mut App, ui: &mut Ui, t: &Theme, rows: &Rows, acts: &mut Vec<Act>
     bui.set_clip_rect(body);
     let store = &app.store;
     let today = app.today;
-    let mut scroll = egui::ScrollArea::vertical()
+    let mut scroll = crate::widgets::scroll_area()
         .id_salt("ledger-scroll")
         .auto_shrink([false, false]);
     if let Some(target) = app.ledger.scroll_to.take()
@@ -1033,7 +1033,7 @@ fn detail(app: &mut App, ui: &mut Ui, t: &Theme, rect: Rect, tx: &Txn, acts: &mu
     let cur = store.account_cur(tx.account);
     let receipts: Vec<magpie_core::Receipt> = store.receipts_for(tx.id).cloned().collect();
     w::card_in(ui, t, rect, |ui| {
-        egui::ScrollArea::vertical()
+        crate::widgets::scroll_area()
             .id_salt("detail-scroll")
             .auto_shrink([false, false])
             .show(ui, |ui| {
@@ -1382,14 +1382,6 @@ fn keyboard(app: &mut App, ctx: &egui::Context, rows: &Rows, acts: &mut Vec<Act>
     }
 }
 
-fn open_path(path: &std::path::Path) {
-    #[cfg(target_os = "macos")]
-    let cmd = "open";
-    #[cfg(not(target_os = "macos"))]
-    let cmd = "xdg-open";
-    let _ = std::process::Command::new(cmd).arg(path).spawn();
-}
-
 fn apply(app: &mut App, ctx: &egui::Context, acts: Vec<Act>) {
     for a in acts {
         match a {
@@ -1445,7 +1437,7 @@ fn apply(app: &mut App, ctx: &egui::Context, acts: Vec<Act>) {
                     ("Receipts", receipts::ALLOWED),
                 );
             }
-            Act::OpenReceipt(p) => open_path(&p),
+            Act::OpenReceipt(p) => crate::app::open_external(&p),
             Act::RemoveReceipt(id) => {
                 let r = receipts::remove(&mut app.store, id);
                 app.toasts.ok(r);

@@ -68,9 +68,10 @@ Linux)
 
     BIN_DIR="${MAGPIE_INSTALL_DIR:-$HOME/.local/bin}"
     DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
-    mkdir -p "$BIN_DIR" "$DATA/applications" "$DATA/icons/hicolor/512x512/apps"
+    mkdir -p "$BIN_DIR" "$DATA/applications" "$DATA/icons/hicolor/512x512/apps" "$DATA/icons/hicolor/scalable/apps"
     install -m 755 "$SRC/magpie" "$BIN_DIR/magpie"
     install -m 644 "$SRC/magpie.png" "$DATA/icons/hicolor/512x512/apps/magpie.png"
+    [ -f "$SRC/magpie.svg" ] && install -m 644 "$SRC/magpie.svg" "$DATA/icons/hicolor/scalable/apps/magpie.svg"
     sed "s|^Exec=magpie|Exec=$BIN_DIR/magpie|" "$SRC/magpie.desktop" >"$DATA/applications/magpie.desktop"
     command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q "$DATA/applications" || true
     command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -t "$DATA/icons/hicolor" 2>/dev/null || true

@@ -432,11 +432,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             }
             Act::OpenFolder => {
                 if let Some(dir) = app.store.dir() {
-                    #[cfg(target_os = "macos")]
-                    let cmd = "open";
-                    #[cfg(not(target_os = "macos"))]
-                    let cmd = "xdg-open";
-                    let _ = std::process::Command::new(cmd).arg(dir).spawn();
+                    crate::app::open_external(dir);
                 }
             }
             Act::Demo => {

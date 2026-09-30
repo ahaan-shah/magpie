@@ -260,7 +260,11 @@ impl Month {
         }
     }
     pub fn first(self) -> Date {
-        Date::new(self.year, self.month, 1).expect("valid month")
+        // Saturate instead of panicking for absurd years (e.g. someone
+        // paging a calendar back 10,000 years).
+        let year = self.year.clamp(-9998, 9998);
+        let month = self.month.clamp(1, 12);
+        Date::new(year, month, 1).unwrap_or(Date::constant(1970, 1, 1))
     }
     pub fn last(self) -> Date {
         self.first().last_of_month()

@@ -53,6 +53,9 @@ pub fn data_dir() -> std::path::PathBuf {
 
 /// `~/Downloads`, falling back to the home directory.
 pub fn downloads_dir() -> std::path::PathBuf {
+    if let Some(p) = std::env::var_os("MAGPIE_EXPORT_DIR") {
+        return p.into();
+    }
     directories::UserDirs::new()
         .and_then(|u| {
             u.download_dir()

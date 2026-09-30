@@ -39,5 +39,6 @@ package() {
   install -Dm644 packaging/linux/magpie.desktop "$pkgdir/usr/share/applications/magpie.desktop"
   install -Dm644 packaging/linux/icon-512.png "$pkgdir/usr/share/icons/hicolor/512x512/apps/magpie.png"
   install -Dm644 packaging/linux/icon-256.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/magpie.png"
+  install -Dm644 packaging/linux/magpie.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/magpie.svg"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

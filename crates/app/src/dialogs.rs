@@ -26,7 +26,7 @@ impl Dialogs {
     where
         F: std::future::Future<Output = Option<rfd::FileHandle>> + Send + 'static,
     {
-        if self.busy() {
+        if self.busy() || crate::app::headless() {
             return;
         }
         crate::diag::crumb(format!("file dialog open: {purpose:?}"));

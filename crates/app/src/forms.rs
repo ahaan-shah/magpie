@@ -1834,7 +1834,7 @@ fn help_ui(ui: &mut Ui, t: &Theme) -> Outcome {
         "Magpie can be driven entirely from the keyboard.",
     );
     let max_h = ui.ctx().content_rect().height() * 0.62;
-    egui::ScrollArea::vertical()
+    crate::widgets::scroll_area()
         .max_height(max_h)
         .show(ui, |ui| shortcut_table(ui, t, 2));
     let (_, cancel) = footer(ui, t, "Got it", |_| {});

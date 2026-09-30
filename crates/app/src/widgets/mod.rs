@@ -66,14 +66,29 @@ pub fn card_scroll<R>(
     );
     child.set_clip_rect(rect.intersect(ui.clip_rect()));
     let content_w = inner.width();
-    egui::ScrollArea::vertical()
+    let out = scroll_area()
         .id_salt(Id::new(("card-scroll", id_salt)))
         .auto_shrink([false, false])
         .show(&mut child, |ui| {
             ui.set_max_width(content_w);
             add(ui)
-        })
-        .inner
+        });
+    // A scrollable card owns the wheel while the pointer is over it: once it
+    // hits its top or bottom, leftover scroll must not chain to the page.
+    let scrollable = out.content_size.y > out.inner_rect.height() + 0.5;
+    if scrollable && ui.rect_contains_pointer(rect) {
+        ui.input_mut(|i| i.smooth_scroll_delta.y = 0.0);
+    }
+    out.inner
+}
+
+/// Extra wheel speed on top of egui's line scroll speed, so touchpads (which
+/// report pixels, not lines) also feel snappier.
+pub const SCROLL_BOOST: f32 = 1.3;
+
+/// A vertical scroll area with Magpie's scroll speed.
+pub fn scroll_area() -> egui::ScrollArea {
+    egui::ScrollArea::vertical().wheel_scroll_multiplier(vec2(1.0, SCROLL_BOOST))
 }
 
 /// Card title row: title on the left, optional right-hand content.

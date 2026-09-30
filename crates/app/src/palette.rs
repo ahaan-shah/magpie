@@ -329,7 +329,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         ui.vertical_centered(|ui| ui.label(w::subtle(&t, "No matches")));
                         ui.add_space(10.0);
                     }
-                    egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
+                    crate::widgets::scroll_area().max_height(360.0).show(ui, |ui| {
                         let cur = app.palette.cursor.min(n.saturating_sub(1));
                         for (i, it) in list.iter().enumerate() {
                             let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 38.0), Sense::click());

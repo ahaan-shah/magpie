@@ -137,3 +137,6 @@ fn main() -> eframe::Result<()> {
         Box::new(move |cc| Ok(Box::new(app::App::new(cc, store)))),
     )
 }
+
+#[cfg(test)]
+mod monkey;
