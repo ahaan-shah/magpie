@@ -694,7 +694,13 @@ fn recent_card(ui: &mut Ui, t: &Theme, store: &Store, d: &Dash, today: Date, act
         }
     });
     if d.recent.is_empty() {
-        w::empty_state(ui, t, ph::RECEIPT, "No transactions yet", "Press Ctrl+N to add one.");
+        w::empty_state(
+            ui,
+            t,
+            ph::RECEIPT,
+            "No transactions yet",
+            concat!("Press ", shortcut!("N"), " to add one."),
+        );
         return;
     }
     for tx in &d.recent {

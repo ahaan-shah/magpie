@@ -1,5 +1,20 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+/// A shortcut label with the platform's command key: `shortcut!("K")` is
+/// "Ctrl K" on Linux and "Cmd K" on macOS.
+#[cfg(target_os = "macos")]
+macro_rules! shortcut {
+    ($k:literal) => {
+        concat!("Cmd ", $k)
+    };
+}
+#[cfg(not(target_os = "macos"))]
+macro_rules! shortcut {
+    ($k:literal) => {
+        concat!("Ctrl ", $k)
+    };
+}
+
 mod app;
 mod forms;
 mod icons;

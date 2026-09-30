@@ -1,5 +1,10 @@
 [package]
-name = "magpie"
+name = "magpie-finance"
+description = "Magpie — a fast, beautiful, local-first personal finance tracker"
+readme = "../../README.md"
+keywords = ["finance", "budget", "expenses", "money", "egui"]
+categories = ["finance", "gui"]
+default-run = "magpie"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,6 +12,10 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
+
+[[bin]]
+name = "magpie"
+path = "src/main.rs"
 
 [dependencies]
 eframe = { version = "0.36.2", default-features = false, features = ["glow", "default_fonts", "wayland", "x11", "persistence"] }

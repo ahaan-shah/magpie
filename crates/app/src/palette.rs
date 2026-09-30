@@ -71,7 +71,7 @@ fn items(app: &mut App, q: &str) -> Vec<Item> {
     v.push(Item {
         icon: ph::PLUS,
         label: "New transaction".into(),
-        hint: "Ctrl N",
+        hint: shortcut!("N"),
         cmd: Cmd::NewTxn,
     });
     v.push(Item {
@@ -102,7 +102,7 @@ fn items(app: &mut App, q: &str) -> Vec<Item> {
         v.push(Item {
             icon: ph::ARROW_COUNTER_CLOCKWISE,
             label: format!("Undo: {l}"),
-            hint: "Ctrl Z",
+            hint: shortcut!("Z"),
             cmd: Cmd::Undo,
         });
     }
@@ -110,7 +110,7 @@ fn items(app: &mut App, q: &str) -> Vec<Item> {
         v.push(Item {
             icon: ph::ARROW_CLOCKWISE,
             label: format!("Redo: {l}"),
-            hint: "Ctrl Shift Z",
+            hint: shortcut!("Shift Z"),
             cmd: Cmd::Redo,
         });
     }

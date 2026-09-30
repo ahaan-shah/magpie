@@ -1,0 +1,43 @@
+# Maintainer: Ahaan Shah <dhanvaan@yahoo.com>
+pkgname=magpie-finance
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Fast, beautiful, local-first personal finance tracker"
+arch=('x86_64' 'aarch64')
+url="https://github.com/ahaan-shah/magpie"
+license=('MIT')
+depends=('gcc-libs' 'glibc' 'libxkbcommon' 'libglvnd' 'hicolor-icon-theme')
+optdepends=('wayland: Wayland support'
+            'libx11: X11 support'
+            'xdg-desktop-portal: native file dialogs')
+makedepends=('cargo')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "magpie-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "magpie-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release -p magpie-finance
+}
+
+check() {
+  cd "magpie-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo test --frozen -p magpie-core
+}
+
+package() {
+  cd "magpie-$pkgver"
+  install -Dm755 target/release/magpie "$pkgdir/usr/bin/magpie"
+  install -Dm644 packaging/linux/magpie.desktop "$pkgdir/usr/share/applications/magpie.desktop"
+  install -Dm644 packaging/linux/icon-512.png "$pkgdir/usr/share/icons/hicolor/512x512/apps/magpie.png"
+  install -Dm644 packaging/linux/icon-256.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/magpie.png"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

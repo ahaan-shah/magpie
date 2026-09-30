@@ -141,7 +141,12 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     let n = magpie_core::io::import_pear(&mut app.store, path, acc)?;
                     return Ok(format!("Imported {n} transactions from Pear"));
                 }
-                Ok("You're all set. Press Ctrl+N to add your first transaction.".into())
+                Ok(concat!(
+                    "You're all set. Press ",
+                    shortcut!("N"),
+                    " to add your first transaction."
+                )
+                .into())
             }
         }
     })();

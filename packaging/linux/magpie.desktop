@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Magpie
+GenericName=Personal Finance
+Comment=Track spending, budgets, accounts and savings goals
+Exec=magpie
+Icon=magpie
+Terminal=false
+Categories=Office;Finance;
+Keywords=money;budget;expenses;finance;ledger;
+StartupWMClass=magpie
+StartupNotify=true

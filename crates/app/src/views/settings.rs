@@ -297,15 +297,15 @@ pub fn show(app: &mut App, ui: &mut Ui) {
 
     section(ui, &t, "Keyboard", "", |ui| {
         let keys = [
-            ("Ctrl K", "Command palette — jump anywhere, run anything"),
-            ("Ctrl N", "New transaction"),
-            ("Ctrl F", "Search transactions"),
-            ("Ctrl Z / Ctrl Shift Z", "Undo / redo"),
-            ("Ctrl 1 – 7", "Switch pages"),
+            (shortcut!("K"), "Command palette — jump anywhere, run anything"),
+            (shortcut!("N"), "New transaction"),
+            (shortcut!("F"), "Search transactions"),
+            (concat!(shortcut!("Z"), " / ", shortcut!("Shift Z")), "Undo / redo"),
+            (shortcut!("1 – 7"), "Switch pages"),
             ("N or /", "Focus quick add (Transactions)"),
             ("↑ ↓  J K", "Move selection (Transactions)"),
             ("Enter · Delete · Esc", "Edit · delete · clear selection"),
-            ("Ctrl / Shift click", "Multi-select"),
+            (concat!(shortcut!("/ Shift"), " click"), "Multi-select"),
         ];
         egui::Grid::new("keys")
             .num_columns(2)

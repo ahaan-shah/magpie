@@ -1405,20 +1405,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
-name = "magpie"
-version = "0.1.0"
-dependencies = [
- "eframe",
- "egui",
- "egui-phosphor",
- "image",
- "jiff",
- "magpie-core",
- "rfd",
- "serde",
-]
-
-[[package]]
 name = "magpie-core"
 version = "0.1.0"
 dependencies = [
@@ -1433,6 +1419,20 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "ureq",
+]
+
+[[package]]
+name = "magpie-finance"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui",
+ "egui-phosphor",
+ "image",
+ "jiff",
+ "magpie-core",
+ "rfd",
+ "serde",
 ]
 
 [[package]]

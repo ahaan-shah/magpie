@@ -9,7 +9,7 @@ license = "MIT"
 authors = ["Ahaan Shah"]
 repository = "https://github.com/ahaan-shah/magpie"
 homepage = "https://github.com/ahaan-shah/magpie"
-rust-version = "1.85"
+rust-version = "1.88"
 
 [profile.release]
 opt-level = 3

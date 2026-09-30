@@ -417,7 +417,7 @@ impl App {
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if widgets::primary(ui, &t, Some(ph::PLUS), "Add")
-                    .on_hover_text("New transaction (Ctrl+N)")
+                    .on_hover_text(concat!("New transaction (", shortcut!("N"), ")"))
                     .clicked()
                 {
                     let m = forms::TxnForm::new(&self.store, self.today);
@@ -702,7 +702,7 @@ fn search_pill(ui: &mut Ui, t: &Theme) -> egui::Response {
     p.text(
         kbd.center(),
         Align2::CENTER_CENTER,
-        "Ctrl K",
+        shortcut!("K"),
         theme::medium(10.5),
         t.text2,
     );
