@@ -27,6 +27,21 @@ pub enum Modal {
     Confirm(Confirm),
 }
 
+impl Modal {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Modal::Txn(_) => "transaction",
+            Modal::Account(_) => "account",
+            Modal::Rule(_) => "recurring",
+            Modal::Goal(_) => "goal",
+            Modal::Contribution(_) => "contribution",
+            Modal::Category(_) => "category",
+            Modal::Import(_) => "import",
+            Modal::Confirm(_) => "confirm",
+        }
+    }
+}
+
 #[derive(PartialEq)]
 enum Outcome {
     Keep,
@@ -96,6 +111,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         return;
     }
     if close && closing.is_none() {
+        crate::diag::crumb(format!("close modal {}", modal.name()));
         app.modal_closing = Some(now);
     }
     app.modal = Some(modal);

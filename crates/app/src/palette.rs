@@ -205,6 +205,7 @@ fn fuzzy(q: &str, s: &str) -> Option<i32> {
 }
 
 fn run(app: &mut App, ctx: &egui::Context, cmd: Cmd) {
+    crate::diag::crumb("palette command");
     match cmd {
         Cmd::Go(p) => app.go(ctx, p),
         Cmd::NewTxn => {

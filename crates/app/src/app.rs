@@ -87,6 +87,7 @@ pub struct App {
     pub settings: views::settings::State,
     pub onboarding: Option<views::onboarding::State>,
     pub receipts: ReceiptCache,
+    pub dialogs: crate::dialogs::Dialogs,
     pub collapsed: bool,
     fx_rx: Option<mpsc::Receiver<FxResult>>,
     pub fx_busy: bool,
@@ -138,6 +139,7 @@ impl App {
             settings: views::settings::State::default(),
             onboarding,
             receipts: ReceiptCache::default(),
+            dialogs: crate::dialogs::Dialogs::default(),
             collapsed: persisted.map(|p| p.collapsed).unwrap_or(false),
             fx_rx: None,
             fx_busy: false,
@@ -154,18 +156,21 @@ impl App {
 
     pub fn go(&mut self, ctx: &egui::Context, page: Page) {
         if self.page != page {
+            crate::diag::crumb(format!("go {page:?}"));
             self.page = page;
             self.shown_at = ctx.input(|i| i.time);
         }
     }
 
     pub fn open_modal(&mut self, ctx: &egui::Context, m: Modal) {
+        crate::diag::crumb(format!("open modal {}", m.name()));
         self.modal = Some(m);
         self.modal_closing = None;
         self.modal_at = ctx.input(|i| i.time);
     }
 
     pub fn set_theme(&mut self, ctx: &egui::Context, name: &str) {
+        crate::diag::crumb(format!("theme {name}"));
         self.theme.switch(ctx, name);
         let n = name.to_string();
         if let Err(e) = self.store.update_settings(|s| s.theme = n) {
@@ -216,7 +221,26 @@ impl App {
         self.fx_busy = true;
     }
 
-    fn poll_jobs(&mut self) {
+    fn poll_jobs(&mut self, ctx: &egui::Context) {
+        use crate::dialogs::Purpose;
+        if let Some((purpose, Some(path))) = self.dialogs.poll() {
+            match purpose {
+                Purpose::ImportCsv => match forms::ImportForm::open(&self.store, path) {
+                    Ok(f) => self.open_modal(ctx, Modal::Import(Box::new(f))),
+                    Err(e) => self.toasts.error(e.to_string()),
+                },
+                Purpose::Attach(id) => {
+                    let r = magpie_core::receipts::attach(&mut self.store, id, &path);
+                    if self.toasts.ok(r).is_some() {
+                        self.toasts.success("Receipt attached");
+                    }
+                }
+                Purpose::Backup => match self.store.backup_to(&path) {
+                    Ok(()) => self.toasts.success(format!("Backed up to {}", path.display())),
+                    Err(e) => self.toasts.error(e.to_string()),
+                },
+            }
+        }
         if let Some(rx) = &self.fx_rx
             && let Ok(r) = rx.try_recv()
         {
@@ -542,6 +566,29 @@ impl App {
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        crate::diag::frame_begin();
+        self.frame(ui);
+        crate::diag::frame_end();
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(
+            storage,
+            "magpie",
+            &Persisted {
+                page: self.page,
+                collapsed: self.collapsed,
+            },
+        );
+    }
+
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        self.theme.current.bg.to_normalized_gamma_f32()
+    }
+}
+
+impl App {
+    fn frame(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
         self.theme.tick(&ctx);
         let t = self.t();
@@ -559,7 +606,7 @@ impl eframe::App for App {
         }
         // Wake up for the date rollover even when idle.
         ctx.request_repaint_after(std::time::Duration::from_secs(60));
-        self.poll_jobs();
+        self.poll_jobs(&ctx);
 
         if self.onboarding.is_some() {
             views::onboarding::show(self, ui);
@@ -588,21 +635,6 @@ impl eframe::App for App {
         {
             self.undo();
         }
-    }
-
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(
-            storage,
-            "magpie",
-            &Persisted {
-                page: self.page,
-                collapsed: self.collapsed,
-            },
-        );
-    }
-
-    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        self.theme.current.bg.to_normalized_gamma_f32()
     }
 }
 

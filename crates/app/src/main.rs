@@ -16,6 +16,8 @@ macro_rules! shortcut {
 }
 
 mod app;
+mod diag;
+mod dialogs;
 mod forms;
 mod icons;
 mod motion;
@@ -93,6 +95,7 @@ fn main() -> eframe::Result<()> {
     }
 
     let dir = data_dir.unwrap_or_else(magpie_core::data_dir);
+    diag::init(&dir);
     let store = if let Some(extra) = demo {
         let demo_dir = std::env::temp_dir().join("magpie-demo");
         let _ = std::fs::remove_dir_all(&demo_dir);

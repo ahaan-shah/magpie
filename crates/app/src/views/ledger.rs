@@ -1416,16 +1416,12 @@ fn apply(app: &mut App, ctx: &egui::Context, acts: Vec<Act>) {
                 app.toasts.ok(r);
             }
             Act::Attach(id) => {
-                let file = rfd::FileDialog::new()
-                    .add_filter("Receipts", receipts::ALLOWED)
-                    .set_title("Attach a receipt")
-                    .pick_file();
-                if let Some(path) = file {
-                    let r = receipts::attach(&mut app.store, id, &path);
-                    if app.toasts.ok(r).is_some() {
-                        app.toasts.success("Receipt attached");
-                    }
-                }
+                app.dialogs.pick(
+                    ctx,
+                    crate::dialogs::Purpose::Attach(id),
+                    "Attach a receipt",
+                    ("Receipts", receipts::ALLOWED),
+                );
             }
             Act::OpenReceipt(p) => open_path(&p),
             Act::RemoveReceipt(id) => {
@@ -1439,16 +1435,12 @@ fn apply(app: &mut App, ctx: &egui::Context, acts: Vec<Act>) {
                 }
             }
             Act::ImportCsv => {
-                if let Some(path) = rfd::FileDialog::new()
-                    .add_filter("CSV", &["csv"])
-                    .set_title("Import transactions")
-                    .pick_file()
-                {
-                    match forms::ImportForm::open(&app.store, path) {
-                        Ok(f) => app.open_modal(ctx, Modal::Import(Box::new(f))),
-                        Err(e) => app.toasts.error(e.to_string()),
-                    }
-                }
+                app.dialogs.pick(
+                    ctx,
+                    crate::dialogs::Purpose::ImportCsv,
+                    "Import transactions",
+                    ("CSV", &["csv"]),
+                );
             }
             Act::Export => {
                 let k = &app.ledger;

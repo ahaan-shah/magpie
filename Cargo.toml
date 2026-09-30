@@ -21,6 +21,15 @@ panic = "abort"
 [profile.dev.package."*"]
 opt-level = 2
 
-# The profile that cargo-dist builds release artifacts with.
+# Release artifacts (built by scripts/package-linux.sh and bundle-macos.sh).
 [profile.dist]
 inherits = "release"
+
+# Optimized but quick to build, for day-to-day iteration:
+#   cargo run --profile fast -- --demo
+[profile.fast]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+strip = false
+panic = "unwind"

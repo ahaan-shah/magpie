@@ -376,12 +376,12 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 app.open_modal(&ctx, Modal::Category(f));
             }
             Act::ImportCsv => {
-                if let Some(path) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).pick_file() {
-                    match forms::ImportForm::open(&app.store, path) {
-                        Ok(f) => app.open_modal(&ctx, Modal::Import(Box::new(f))),
-                        Err(e) => app.toasts.error(e.to_string()),
-                    }
-                }
+                app.dialogs.pick(
+                    &ctx,
+                    crate::dialogs::Purpose::ImportCsv,
+                    "Import transactions",
+                    ("CSV", &["csv"]),
+                );
             }
             Act::ImportPear => {
                 if let (Some(path), Some(acc)) = (magpie_core::io::pear_path(), app.store.default_account()) {
@@ -394,16 +394,12 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             Act::Export(f) => export_all(app, f),
             Act::Backup => {
                 let name = format!("magpie-backup-{}.db", app.today);
-                if let Some(path) = rfd::FileDialog::new()
-                    .set_file_name(&name)
-                    .add_filter("SQLite database", &["db"])
-                    .save_file()
-                {
-                    match app.store.backup_to(&path) {
-                        Ok(()) => app.toasts.success(format!("Backed up to {}", path.display())),
-                        Err(e) => app.toasts.error(e.to_string()),
-                    }
-                }
+                app.dialogs.save(
+                    &ctx,
+                    crate::dialogs::Purpose::Backup,
+                    &name,
+                    ("SQLite database", &["db"]),
+                );
             }
             Act::OpenFolder => {
                 if let Some(dir) = app.store.dir() {
