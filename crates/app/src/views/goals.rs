@@ -12,10 +12,12 @@ use magpie_core::goals::{self, GoalStatus};
 use magpie_core::{Goal, Id as RowId, Store};
 use std::rc::Rc;
 
+type Goals = Rc<Vec<(Goal, GoalStatus)>>;
+
 #[derive(Default)]
 pub struct State {
     show_archived: bool,
-    memo: Memo<(u64, Date), Rc<Vec<(Goal, GoalStatus)>>>,
+    memo: Memo<(u64, Date), Goals>,
 }
 
 enum Act {

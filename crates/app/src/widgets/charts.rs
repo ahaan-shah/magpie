@@ -91,6 +91,24 @@ pub fn nice_scale(max: f32, ticks: usize) -> (f32, f32) {
     ((max / step).ceil() * step, step)
 }
 
+/// Axis bounds `(min, max, step)` covering `lo..=hi` with ~4 nice ticks.
+/// The step comes from the whole span, so a tiny max with a huge negative
+/// min can't produce millions of grid lines.
+pub fn axis(lo: f32, hi: f32) -> (f32, f32, f32) {
+    let (lo, hi) = if lo.is_finite() && hi.is_finite() {
+        (lo.min(hi), hi.max(lo))
+    } else {
+        (0.0, 1.0)
+    };
+    let (_, step) = nice_scale((hi - lo).max(1.0), 4);
+    let min = (lo / step).floor() * step;
+    let mut max = (hi / step).ceil() * step;
+    if max <= min {
+        max = min + step;
+    }
+    (min, max, step)
+}
+
 fn tooltip(ui: &Ui, t: &Theme, id: Id, anchor: Pos2, title: &str, lines: &[(Color32, String)]) {
     let painter = ui.ctx().layer_painter(LayerId::new(Order::Tooltip, id.with("tip")));
     let title_g = painter.layout_no_wrap(title.to_string(), theme::medium(11.5), t.text2);
@@ -139,7 +157,9 @@ fn grid(ui: &Ui, t: &Theme, plot: Rect, max: f32, step: f32, min: f32, fmt: &dyn
     let p = ui.painter();
     let range = max - min;
     let mut v = min;
-    while v <= max + step * 0.01 {
+    let mut n = 0;
+    while v <= max + step * 0.01 && n < 16 {
+        n += 1;
         let y = plot.bottom() - (v - min) / range * plot.height();
         let y = p.round_to_pixel_center(y);
         p.hline(
@@ -268,13 +288,11 @@ pub fn area_chart(ui: &mut Ui, t: &Theme, id: Id, rect: Rect, values: &[f32], o:
         lo = lo.min(0.0);
         hi = hi.max(0.0);
     }
-    let (max, step, min) = if o.axis {
-        let (m, s) = nice_scale(hi.max(1.0), 4);
-        let min = if lo < 0.0 { -(nice_scale(-lo, 4).0) } else { 0.0 };
-        (m, s, if o.baseline_zero { min } else { (lo / s).floor() * s })
+    let (min, max, step) = if o.axis {
+        axis(lo, hi)
     } else {
         let pad = ((hi - lo) * 0.12).max(1.0);
-        (hi + pad, 1.0, lo - pad * if o.baseline_zero { 0.0 } else { 1.0 })
+        (lo - if o.baseline_zero { 0.0 } else { pad }, hi + pad, 1.0)
     };
     let range = (max - min).max(1e-6);
     let n = vals.len();
@@ -401,6 +419,7 @@ pub struct BarGroup {
 
 /// Grouped bars (e.g. income vs expense per month) with an optional net
 /// line drawn through the groups.
+#[allow(clippy::too_many_arguments)]
 pub fn grouped_bars(
     ui: &mut Ui,
     t: &Theme,
@@ -426,8 +445,7 @@ pub fn grouped_bars(
         pos2(rect.left() + 52.0, rect.top() + 6.0),
         pos2(rect.right() - 6.0, rect.bottom() - 24.0),
     );
-    let (max, step) = nice_scale(hi.max(1.0), 4);
-    let min = if lo < 0.0 { -((-lo / step).ceil() * step) } else { 0.0 };
+    let (min, max, step) = axis(lo.min(0.0), hi.max(0.0));
     let range = max - min;
     grid(ui, t, plot, max, step, min, fmt);
     let zero_y = plot.bottom() - (0.0 - min) / range * plot.height();
@@ -691,6 +709,7 @@ pub fn donut(ui: &mut Ui, t: &Theme, id: Id, rect: Rect, slices: &[Slice], thick
 }
 
 /// Progress ring (goals, savings rate).
+#[allow(clippy::too_many_arguments)]
 pub fn ring(ui: &Ui, id: Id, center: Pos2, radius: f32, width: f32, frac: f32, color: Color32, track: Color32) {
     let f = motion::tween_from(ui.ctx(), id, 0.0, frac.clamp(0.0, 1.0), motion::CHART * 1.3);
     let p = ui.painter();
@@ -817,5 +836,26 @@ pub fn heatmap(
             &crate::widgets::fmt_date(d),
             &[(t.accent, if v > 0 { fmt(v) } else { "No spending".into() })],
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn axis_step_follows_span() {
+        let (min, max, step) = axis(-4_400_000.0, 0.5);
+        assert!(((max - min) / step) <= 8.0, "{min} {max} {step}");
+        let (min, max, step) = axis(0.0, 0.0);
+        assert!(max > min && step > 0.0);
+        let (min, max, _) = axis(1200.0, 6300.0);
+        assert!(min <= 1200.0 && max >= 6300.0);
+    }
+
+    #[test]
+    fn smooth_never_overshoots() {
+        let pts = [pos2(0.0, 0.0), pos2(1.0, 10.0), pos2(2.0, 10.0), pos2(3.0, 0.0)];
+        assert!(smooth(&pts, 10).iter().all(|p| p.y >= -0.001 && p.y <= 10.001));
     }
 }

@@ -14,6 +14,27 @@ mod widgets;
 
 use magpie_core::Store;
 use std::path::PathBuf;
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
+
+static STARTED: OnceLock<Instant> = OnceLock::new();
+static FIRST_FRAME: AtomicBool = AtomicBool::new(true);
+
+/// With `MAGPIE_DEBUG=1`, reports time-to-first-frame and any frame whose
+/// UI pass takes longer than 8ms.
+pub fn debug_frame(page: app::Page, took: Duration) {
+    if std::env::var_os("MAGPIE_DEBUG").is_none() {
+        return;
+    }
+    if FIRST_FRAME.swap(false, Ordering::Relaxed)
+        && let Some(s) = STARTED.get()
+    {
+        eprintln!("magpie: first frame after {:.0?} (ui pass {took:.1?})", s.elapsed());
+    } else if took > Duration::from_millis(8) {
+        eprintln!("magpie: slow frame on {page:?}: {took:.1?}");
+    }
+}
 
 const HELP: &str = "\
 magpie — a fast, beautiful personal finance tracker
@@ -30,6 +51,7 @@ OPTIONS:
 ";
 
 fn main() -> eframe::Result<()> {
+    STARTED.get_or_init(Instant::now);
     let mut args = std::env::args().skip(1);
     let mut data_dir: Option<PathBuf> = None;
     let mut demo: Option<usize> = None;

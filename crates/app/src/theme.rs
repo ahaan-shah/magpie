@@ -224,17 +224,6 @@ impl Theme {
             Color32::from_rgba_premultiplied(20, 24, 40, 22)
         }
     }
-
-    /// Positive/negative colour for a signed amount.
-    pub fn signed(&self, v: i64) -> Color32 {
-        if v > 0 {
-            self.pos
-        } else if v < 0 {
-            self.text
-        } else {
-            self.text2
-        }
-    }
 }
 
 // ----------------------------------------------------------------- spacing

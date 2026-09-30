@@ -120,7 +120,21 @@ fn date_str(d: Date) -> String {
     d.to_string()
 }
 
+/// Fast path for the fixed `YYYY-MM-DD` format we always write, falling
+/// back to jiff's general parser for anything else.
 fn parse_date(s: &str) -> Date {
+    let b = s.as_bytes();
+    if b.len() == 10 && b[4] == b'-' && b[7] == b'-' {
+        let n = |r: std::ops::Range<usize>| {
+            b[r].iter()
+                .try_fold(0i32, |a, c| c.is_ascii_digit().then(|| a * 10 + (c - b'0') as i32))
+        };
+        if let (Some(y), Some(m), Some(d)) = (n(0..4), n(5..7), n(8..10))
+            && let Ok(date) = Date::new(y as i16, m as i8, d as i8)
+        {
+            return date;
+        }
+    }
     s.parse().unwrap_or(Date::constant(1970, 1, 1))
 }
 
@@ -151,7 +165,8 @@ impl Db {
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;
              PRAGMA foreign_keys = ON;
-             PRAGMA temp_store = MEMORY;",
+             PRAGMA temp_store = MEMORY;
+             PRAGMA mmap_size = 268435456;",
         )?;
         let db = Db { conn };
         db.migrate()?;
@@ -299,22 +314,24 @@ impl Db {
         Ok(Txn {
             id: r.get(0)?,
             account: r.get(1)?,
-            date: parse_date(&r.get::<_, String>(2)?),
+            date: parse_date(r.get_ref(2)?.as_str()?),
             amount: r.get(3)?,
             payee: r.get(4)?,
             category: r.get(5)?,
             note: r.get(6)?,
-            tags: split_tags(&r.get::<_, String>(7)?),
+            tags: split_tags(r.get_ref(7)?.as_str()?),
             transfer: r.get(8)?,
             recurring: r.get(9)?,
             cleared: r.get(10)?,
         })
     }
 
+    /// All transactions in rowid order (a plain table scan is ~2x faster
+    /// than walking the date index); the store sorts them in memory.
     pub fn txns(&self) -> Result<Vec<Txn>> {
         let mut st = self.conn.prepare(
             "SELECT id, account_id, date, amount, payee, category_id, note, tags, transfer_id, recurring_id, cleared
-             FROM transactions ORDER BY date, id",
+             FROM transactions",
         )?;
         let rows = st.query_map([], Self::txn_row)?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)

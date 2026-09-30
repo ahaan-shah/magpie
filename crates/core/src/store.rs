@@ -106,6 +106,8 @@ impl Store {
             rates.set(c, r, manual);
         }
 
+        let mut txns = db.txns()?;
+        txns.sort_by_key(sort_key);
         let overrides = db
             .budget_overrides()?
             .into_iter()
@@ -115,7 +117,7 @@ impl Store {
         Ok(Store {
             accounts: db.accounts()?,
             categories: db.categories()?,
-            txns: db.txns()?,
+            txns,
             plans: db.budget_plans()?,
             overrides,
             rules: db.rules()?,

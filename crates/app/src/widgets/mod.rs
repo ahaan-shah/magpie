@@ -701,10 +701,6 @@ pub fn faint(t: &Theme, text: impl Into<String>) -> egui::RichText {
     egui::RichText::new(text).font(theme::regular(12.0)).color(t.text3)
 }
 
-pub fn strong(t: &Theme, text: impl Into<String>) -> egui::RichText {
-    egui::RichText::new(text).font(theme::semibold(13.5)).color(t.text)
-}
-
 pub fn colored_dot(ui: &mut Ui, color: Color32) {
     let (r, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
     ui.painter().circle_filled(r.center(), 4.0, color);

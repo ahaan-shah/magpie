@@ -11,7 +11,7 @@ use crate::widgets;
 use crate::{motion, receipts_cache::ReceiptCache};
 use egui::{Align2, Color32, CornerRadius, Id, Key, Modifiers, Rect, Sense, Stroke, Ui, pos2, vec2};
 use jiff::civil::Date;
-use magpie_core::{Cur, Id as RowId, Store, analytics, recurring};
+use magpie_core::{Cur, Store, analytics, recurring};
 use std::sync::mpsc;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
@@ -576,8 +576,10 @@ impl eframe::App for App {
             self.tour = Some(tour);
         }
         self.shortcuts(&ctx);
+        let t0 = std::time::Instant::now();
         self.sidebar(ui);
         self.content(ui);
+        crate::debug_frame(self.page, t0.elapsed());
         forms::show(self, &ctx);
         crate::palette::show(self, &ctx);
         self.drop_overlay(&ctx);
@@ -742,12 +744,4 @@ impl<K: PartialEq, V> Memo<K, V> {
         }
         self.val.as_ref().expect("just set")
     }
-    pub fn clear(&mut self) {
-        self.key = None;
-        self.val = None;
-    }
-}
-
-pub fn account_balance(store: &Store, id: RowId) -> i64 {
-    analytics::balances(store).get(&id).copied().unwrap_or(0)
 }

@@ -22,7 +22,6 @@ pub struct Dash {
     nw_series: Vec<(Month, i64)>,
     this: Totals,
     last: Totals,
-    spend_cum: Vec<f32>,
     income_trend: Vec<f32>,
     expense_trend: Vec<f32>,
     net_trend: Vec<f32>,
@@ -41,15 +40,6 @@ pub struct Dash {
 fn build(store: &Store, today: Date) -> Dash {
     let m = Month::of(today);
     let this = analytics::month_totals(store, m);
-    let daily = analytics::daily_spend(store, m.first(), today);
-    let mut acc = 0i64;
-    let spend_cum: Vec<f32> = daily
-        .iter()
-        .map(|v| {
-            acc += v;
-            acc as f32
-        })
-        .collect();
     let cashflow = analytics::cashflow(store, m, 12);
     let six = &cashflow[cashflow.len() - 6..];
     let budgets = budget::month_budget(store, m);
@@ -64,7 +54,6 @@ fn build(store: &Store, today: Date) -> Dash {
         nw_series: analytics::net_worth_series(store, m, 12),
         this,
         last: analytics::month_totals(store, m.prev()),
-        spend_cum,
         income_trend: six.iter().map(|(_, t)| t.income as f32).collect(),
         expense_trend: six.iter().map(|(_, t)| t.expense as f32).collect(),
         net_trend: six.iter().map(|(_, t)| t.net() as f32).collect(),

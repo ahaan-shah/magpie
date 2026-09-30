@@ -1594,7 +1594,6 @@ impl ImportForm {
 // ============================================================= Confirm
 
 pub enum ConfirmAction {
-    DeleteTxns(Vec<RowId>),
     DeleteAccount(RowId),
     DeleteGoal(RowId),
     DeleteCategory(RowId),
@@ -1644,13 +1643,6 @@ impl Confirm {
         }
         let ctx = ui.ctx().clone();
         match &self.action {
-            ConfirmAction::DeleteTxns(ids) => {
-                if let Some(n) = app.toasts.ok(app.store.delete_txns(ids)) {
-                    app.toasts
-                        .undoable(format!("Deleted {n} transaction{}", if n == 1 { "" } else { "s" }));
-                    app.ledger.clear_selection();
-                }
-            }
             ConfirmAction::DeleteAccount(id) => {
                 if app.toasts.ok(app.store.delete_account(*id)).is_some() {
                     app.toasts.info("Account deleted");

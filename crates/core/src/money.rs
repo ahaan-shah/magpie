@@ -451,9 +451,9 @@ mod tests {
             compact: true,
             ..Default::default()
         };
-        assert_eq!(format(1_234_500_00, usd(), o), "$1.2M");
-        assert_eq!(format(45_600_00, usd(), o), "$45.6k");
-        assert_eq!(format(9_999_00, usd(), o), "$9,999");
+        assert_eq!(format(123_450_000, usd(), o), "$1.2M");
+        assert_eq!(format(4_560_000, usd(), o), "$45.6k");
+        assert_eq!(format(999_900, usd(), o), "$9,999");
     }
 
     #[test]
