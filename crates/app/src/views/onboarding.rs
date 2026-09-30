@@ -50,13 +50,12 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             let full = ui.max_rect();
             // Soft accent glow behind the card.
             let glow = motion::appear(&ctx, shown, 0.0, 1.2);
-            for (i, r) in [420.0, 300.0, 200.0].iter().enumerate() {
-                ui.painter().circle_filled(
-                    full.center() - vec2(0.0, 120.0),
-                    *r,
-                    motion::with_alpha(t.accent, 0.035 * glow * (i as f32 + 1.0)),
-                );
-            }
+            w::radial_glow(
+                ui.painter(),
+                full.center() - vec2(0.0, 120.0),
+                520.0,
+                motion::with_alpha(t.accent, 0.16 * glow),
+            );
             let p = motion::appear(&ctx, shown, 0.1, 0.6);
             let card_w = 480.0;
             let rect = Rect::from_center_size(full.center() + vec2(0.0, (1.0 - p) * 24.0), vec2(card_w, 560.0));

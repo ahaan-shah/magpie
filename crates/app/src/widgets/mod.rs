@@ -770,3 +770,38 @@ pub fn rounded_gradient(p: &egui::Painter, r: Rect, radius: f32, top: Color32, b
     let mid = motion::lerp_color(top, bottom, 0.5);
     p.add(PathShape::closed_line(outline, PathStroke::new(1.0, mid)));
 }
+
+/// A soft radial glow: `color` at the centre fading to transparent at `radius`.
+pub fn radial_glow(p: &egui::Painter, center: egui::Pos2, radius: f32, color: Color32) {
+    use egui::epaint::Mesh;
+    let rings = 24;
+    let segs = 64;
+    let mut mesh = Mesh::default();
+    mesh.colored_vertex(center, color);
+    for r in 1..=rings {
+        let k = r as f32 / rings as f32;
+        // Smooth falloff so there's no visible edge.
+        let a = (1.0 - k).powf(2.2);
+        for s in 0..segs {
+            let ang = s as f32 / segs as f32 * std::f32::consts::TAU;
+            mesh.colored_vertex(
+                center + vec2(ang.cos(), ang.sin()) * radius * k,
+                color.gamma_multiply(a),
+            );
+        }
+    }
+    for s in 0..segs as u32 {
+        let n = (s + 1) % segs as u32;
+        mesh.add_triangle(0, 1 + s, 1 + n);
+    }
+    for r in 0..(rings - 1) as u32 {
+        let a0 = 1 + r * segs as u32;
+        let b0 = a0 + segs as u32;
+        for s in 0..segs as u32 {
+            let n = (s + 1) % segs as u32;
+            mesh.add_triangle(a0 + s, b0 + s, b0 + n);
+            mesh.add_triangle(a0 + s, b0 + n, a0 + n);
+        }
+    }
+    p.add(egui::Shape::mesh(mesh));
+}
