@@ -6,6 +6,7 @@
 # Environment:
 #   MAGPIE_VERSION      install a specific version (e.g. 0.1.0) instead of the latest
 #   MAGPIE_INSTALL_DIR  where the Linux binary goes (default: ~/.local/bin)
+#   MAGPIE_BASE_URL     download from a mirror instead of GitHub releases
 set -eu
 
 REPO="ahaan-shah/magpie"
@@ -23,6 +24,8 @@ if [ "$VERSION" = "latest" ]; then
 else
     BASE="https://github.com/$REPO/releases/download/v${VERSION#v}"
 fi
+
+BASE="${MAGPIE_BASE_URL:-$BASE}"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT INT TERM
