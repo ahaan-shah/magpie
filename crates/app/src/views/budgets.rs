@@ -493,12 +493,13 @@ fn budget_row(
                 acts.push(Act::Remove(l.category));
             }
         });
-        if rollover != rollover0 && !app.budgets.this_month_only {
-            if let Some(mut plan) = store.budget_plan(l.category).cloned() {
-                plan.rollover = rollover;
-                let r = app.store.save_budget_plan(plan);
-                app.toasts.ok(r);
-            }
+        if rollover != rollover0
+            && !app.budgets.this_month_only
+            && let Some(mut plan) = store.budget_plan(l.category).cloned()
+        {
+            plan.rollover = rollover;
+            let r = app.store.save_budget_plan(plan);
+            app.toasts.ok(r);
         }
     }
 }

@@ -449,10 +449,11 @@ impl TxnForm {
                         });
                 }
             }
-            if r.changed() && self.auto_category {
-                if let Some(p) = payees.iter().find(|p| p.name.to_lowercase() == q) {
-                    self.category = p.category;
-                }
+            if r.changed()
+                && self.auto_category
+                && let Some(p) = payees.iter().find(|p| p.name.to_lowercase() == q)
+            {
+                self.category = p.category;
             }
             ui.add_space(8.0);
             let store = &app.store;
