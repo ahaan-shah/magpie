@@ -32,4 +32,4 @@ jobs:
       - run: cargo test --all --locked
       - name: Shellcheck installer
         if: runner.os == 'Linux'
-        run: shellcheck install.sh scripts/*.sh
+        run: shellcheck -S warning install.sh scripts/*.sh

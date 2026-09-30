@@ -111,7 +111,11 @@ pub struct App {
     tour: Option<crate::tour::Tour>,
     pub keys: NavKeys,
     panics: u32,
+    last_frame: Option<std::time::Instant>,
 }
+
+/// Maximum frames per second while something is animating.
+const FRAME_CAP: f32 = 144.0;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) struct Persisted {
@@ -179,6 +183,7 @@ impl App {
             tour: crate::tour::Tour::from_env(),
             keys: NavKeys::default(),
             panics: 0,
+            last_frame: None,
             store,
         };
         app.maybe_refresh_fx(ctx, false);
@@ -779,6 +784,16 @@ impl App {
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        // Frame pacing (vsync is off, see main.rs): while animating, don't
+        // render faster than FRAME_CAP. Idle frames aren't affected.
+        if let Some(last) = self.last_frame {
+            let min = std::time::Duration::from_secs_f32(1.0 / FRAME_CAP);
+            let since = last.elapsed();
+            if since < min {
+                std::thread::sleep(min - since);
+            }
+        }
+        self.last_frame = Some(std::time::Instant::now());
         crate::diag::frame_begin();
         // Crash shield: a bug in one frame must never take the app (and the
         // user's unsaved typing) down. Log it, reset the view, keep going.

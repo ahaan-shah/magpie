@@ -196,10 +196,11 @@ fn goal_card(
 ) {
     let color = w::cat_color(g.color);
     let resp = ui.interact(rect, Id::new(("goal-card", g.id)), Sense::hover());
+    let _ = resp;
     let h = motion::toggle(
         ui.ctx(),
         Id::new(("goal-h", g.id)),
-        resp.hovered() || selected,
+        ui.rect_contains_pointer(rect) || selected,
         motion::MICRO,
     );
     let rect = rect.translate(vec2(0.0, -2.0 * h));

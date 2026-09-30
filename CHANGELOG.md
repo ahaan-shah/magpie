@@ -4,7 +4,7 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0] - 2026-09-30
+## [0.1.0] - 2026-10-01
 
 First release.
 
@@ -24,3 +24,7 @@ First release.
 - 8 themes with animated crossfade, command palette (Ctrl+K), keyboard
   shortcuts.
 - Export to CSV, Excel and JSON; database backups; import from Pear.
+- Adjustable interface size, keyboard shortcuts for everything (press `?`),
+  undoable budget edits, custom budget categories, and main-currency
+  switching that converts budgets, goals and (optionally) accounts.
+- Crash shield and diagnostics log; headless "monkey" stress test in CI.

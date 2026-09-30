@@ -127,6 +127,14 @@ fn main() -> eframe::Result<()> {
             .with_min_inner_size([940.0, 620.0])
             .with_icon(icon),
         multisampling: 0,
+        // Don't block in eglSwapBuffers waiting for vblank: on Wayland a hidden
+        // window (other workspace) never gets frame callbacks, so a vsync'd
+        // swap can hang the UI thread until the compositor says "not
+        // responding". Magpie paces its own frames instead (see App::ui).
+        glow_options: eframe::egui_glow::GlowConfiguration {
+            vsync: false,
+            ..Default::default()
+        },
         centered: true,
         persist_window: true,
         ..Default::default()

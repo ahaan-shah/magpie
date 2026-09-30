@@ -277,12 +277,11 @@ fn account_card(
     if scroll_into_view {
         ui.scroll_to_rect(rect, None);
     }
-    let h = motion::toggle(
-        ui.ctx(),
-        Id::new(("acc-h", a.id)),
-        resp.hovered() || selected,
-        motion::MICRO,
-    );
+    // Geometric hover: the edit button sits on top of the card, and using
+    // `resp.hovered()` made the card "un-hover" under it — the button then
+    // vanished, flickered, and clicks fell through to the card.
+    let over = ui.rect_contains_pointer(rect);
+    let h = motion::toggle(ui.ctx(), Id::new(("acc-h", a.id)), over || selected, motion::MICRO);
     let lift = rect.translate(vec2(0.0, -2.0 * h));
     let color = w::cat_color(a.color);
     w::card_in(ui, t, lift, |ui| {
@@ -302,7 +301,7 @@ fn account_card(
                 ui.label(w::faint(t, format!("{} · {}", a.kind.label(), a.currency)));
             });
             ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                if h > 0.05 && w::icon_button(ui, t, ph::PENCIL_SIMPLE, "Edit").clicked() {
+                if (over || selected) && w::icon_button(ui, t, ph::PENCIL_SIMPLE, "Edit account (E)").clicked() {
                     acts.push(Act::Edit(a.id));
                 }
             });

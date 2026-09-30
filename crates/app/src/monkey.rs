@@ -230,3 +230,78 @@ fn monkey_many_seeds() {
         run(seed, frames);
     }
 }
+
+/// Regression: hovering an account card's pencil used to make the card
+/// "un-hover", so the pencil flickered and the click opened Transactions.
+#[test]
+fn account_edit_button_opens_editor() {
+    unsafe {
+        std::env::set_var("MAGPIE_HEADLESS", "1");
+    }
+    let dir = std::env::temp_dir().join("magpie-edit-test");
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut store = magpie_core::Store::open(&dir).expect("open store");
+    magpie_core::demo::seed_defaults(&mut store, magpie_core::Cur::USD).expect("seed");
+    store.update_settings(|s| s.onboarded = true).expect("settings");
+    let acc = store.accounts()[0].id;
+
+    let ctx = egui::Context::default();
+    let mut app = App::with_context(&ctx, None, store);
+    app.go(&ctx, Page::Accounts);
+    let size = vec2(1400.0, 900.0);
+    let mut time = 0.0;
+    let mut frame = |app: &mut App, events: Vec<Event>| {
+        time += 1.0 / 60.0;
+        let raw = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, size)),
+            time: Some(time),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| app.frame(ui));
+        out.textures_delta.clear();
+    };
+    for _ in 0..60 {
+        frame(&mut app, vec![]);
+    }
+    let card = ctx
+        .read_response(egui::Id::new(("acc-card", acc)))
+        .expect("card rendered")
+        .rect;
+    // Hover the card, then walk onto the pencil in its top-right corner.
+    frame(&mut app, vec![Event::PointerMoved(card.center())]);
+    for _ in 0..20 {
+        frame(&mut app, vec![]);
+    }
+    // Scan the top-right area for the button, clicking where it is.
+    let mut opened = false;
+    'scan: for dy in [30.0f32, 34.0, 38.0, 42.0] {
+        for dx in [30.0f32, 34.0, 38.0, 42.0] {
+            let p = pos2(card.right() - dx, card.top() + dy);
+            frame(&mut app, vec![Event::PointerMoved(p)]);
+            for _ in 0..12 {
+                frame(&mut app, vec![]);
+            }
+            let click = |pressed| Event::PointerButton {
+                pos: p,
+                button: PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            };
+            frame(&mut app, vec![click(true)]);
+            frame(&mut app, vec![click(false)]);
+            frame(&mut app, vec![]);
+            if app.modal.as_ref().is_some_and(|m| m.name() == "account") {
+                opened = true;
+                break 'scan;
+            }
+            assert_eq!(
+                app.page,
+                Page::Accounts,
+                "clicking near the pencil at {p:?} navigated away"
+            );
+        }
+    }
+    assert!(opened, "the edit button never opened the account editor");
+    let _ = std::fs::remove_dir_all(&dir);
+}
