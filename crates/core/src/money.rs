@@ -394,10 +394,8 @@ pub fn parse(input: &str, cur: Cur) -> Option<i64> {
     }
     let mut frac: i64 = if frac_str.is_empty() { 0 } else { frac_str.parse().ok()? };
     // Round on the first dropped digit.
-    if let Some(next) = digits_frac.chars().nth(exp) {
-        if next >= '5' {
-            frac += 1;
-        }
+    if digits_frac.chars().nth(exp).is_some_and(|next| next >= '5') {
+        frac += 1;
     }
     let v = whole.checked_mul(cur.scale())?.checked_add(frac)?;
     Some(if neg { -v } else { v })

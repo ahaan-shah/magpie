@@ -60,10 +60,8 @@ pub fn remove(store: &mut Store, id: Id) -> Result<()> {
     };
     store.delete_receipt(id)?;
     let still_used = store.all_receipts().iter().any(|x| x.hash == r.hash);
-    if !still_used {
-        if let Some(p) = path_of(store, &r) {
-            let _ = std::fs::remove_file(p);
-        }
+    if !still_used && let Some(p) = path_of(store, &r) {
+        let _ = std::fs::remove_file(p);
     }
     Ok(())
 }
