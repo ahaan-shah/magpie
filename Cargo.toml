@@ -1,0 +1,26 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Ahaan Shah"]
+repository = "https://github.com/ahaan-shah/magpie"
+homepage = "https://github.com/ahaan-shah/magpie"
+rust-version = "1.85"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev.package."*"]
+opt-level = 2
+
+# The profile that cargo-dist builds release artifacts with.
+[profile.dist]
+inherits = "release"

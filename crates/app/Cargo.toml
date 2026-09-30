@@ -1,0 +1,21 @@
+[package]
+name = "magpie"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+eframe = { version = "0.36.2", default-features = false, features = ["glow", "default_fonts", "wayland", "x11", "persistence"] }
+egui = "0.36.2"
+egui-phosphor = "0.14.0"
+egui_extras = "0.36.2"
+egui_plot = "0.37.0"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
+jiff = "0.2.37"
+magpie-core = { version = "0.1.0", path = "../core" }
+rfd = "0.17.2"
+serde = { version = "1.0.229", features = ["derive"] }
