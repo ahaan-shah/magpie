@@ -132,7 +132,7 @@ impl App {
     /// Builds the app against any egui context (the real window, or a
     /// headless one in tests).
     pub(crate) fn with_context(ctx: &egui::Context, persisted: Option<Persisted>, mut store: Store) -> App {
-        theme::install_fonts(ctx);
+        theme::install_fonts(ctx, &store.settings().font);
         // Magpie owns zoom (so it can be saved); turn off egui's own keys.
         ctx.options_mut(|o| {
             o.zoom_with_keyboard = false;
@@ -242,6 +242,15 @@ impl App {
         ctx.set_zoom_factor(scale);
         crate::diag::crumb(format!("ui scale {scale}"));
         let r = self.store.update_settings(|s| s.ui_scale = scale);
+        self.toasts.ok(r);
+    }
+
+    /// Switches the interface font (live) and remembers it.
+    pub fn set_font(&mut self, ctx: &egui::Context, name: &str) {
+        theme::install_fonts(ctx, name);
+        crate::diag::crumb(format!("font {name}"));
+        let n = name.to_string();
+        let r = self.store.update_settings(|s| s.font = n);
         self.toasts.ok(r);
     }
 

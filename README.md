@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="packaging/linux/icon-256.png" width="112" alt="Magpie icon">
+<img src="packaging/linux/magpie.svg" width="128" alt="Magpie icon">
 
 # Magpie
 
@@ -82,7 +82,7 @@ Each chart is animated and interactive.
 - 14 themes, 7 light (Daylight, Paper, Latte, Flexoki, Rosé Pine Dawn, Lupine, Snow) and 7 dark (Midnight, Tokyo Night, Mocha, Nord, Gruvbox, Kanagawa, Everforest), that crossfade when you switch.
 - A command palette (Ctrl+K), adjustable interface size and scroll speed, and keyboard shortcuts for everything (press `?`).
 - Export to CSV, Excel or JSON, plus one-click database backups.
-- Import from Pear, Magpie's terminal-based predecessor.
+- Import from [Pear](https://github.com/ahaan-shah/pear), Magpie's terminal-based predecessor.
 
 ## Install
 

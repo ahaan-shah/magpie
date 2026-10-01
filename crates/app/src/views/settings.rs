@@ -19,6 +19,7 @@ pub struct State {
 enum Act {
     Theme(&'static str),
     Scale(f32),
+    Font(&'static str),
     ScrollSpeed(f32),
     Base(Cur),
     FxAuto(bool),
@@ -65,6 +66,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let current_theme = app.theme.target_name();
 
     let zoom = ui.ctx().zoom_factor();
+    let s_font = app.store.settings().font.clone();
     // ← / → cycle themes on this page.
     if app.keys.left || app.keys.right {
         let i = THEMES.iter().position(|x| x.name == current_theme).unwrap_or(0);
@@ -76,7 +78,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         ui,
         &t,
         "Appearance and feel",
-        "Pick a look (← → to flip through). Switching crossfades smoothly.",
+        "Pick a look (← → to flip through).",
         |ui| {
             for (label, dark) in [("LIGHT", false), ("DARK", true)] {
                 ui.label(w::faint(&t, label));
@@ -91,6 +93,45 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 });
                 ui.add_space(10.0);
             }
+            ui.add_space(18.0);
+            ui.label(egui::RichText::new("Font").font(theme::semibold(14.0)).color(t.text));
+            ui.label(w::subtle(&t, "Every font is bundled with Magpie and works offline."));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                let current = s_font.clone();
+                let label = egui::RichText::new(&current)
+                    .family(theme::preview_family(&current))
+                    .size(14.5)
+                    .color(t.text);
+                w::dropdown(ui, "font-picker", label, 240.0, |ui| {
+                    for f in theme::FONTS {
+                        let mut text = egui::RichText::new(f.name)
+                            .family(theme::preview_family(f.name))
+                            .size(15.0);
+                        if f.name == current {
+                            text = text.color(t.accent);
+                        }
+                        let resp = ui.selectable_label(f.name == current, text);
+                        let resp = if f.mono {
+                            resp.on_hover_text("Monospaced — every character the same width")
+                        } else {
+                            resp
+                        };
+                        if resp.clicked() && f.name != current {
+                            acts.push(Act::Font(f.name));
+                        }
+                    }
+                });
+                if theme::font_by_name(&current).mono {
+                    w::chip(ui, &t, None, "monospace", t.text2);
+                }
+                ui.add_space(12.0);
+                ui.label(
+                    egui::RichText::new("Groceries  ·  $1,284.50  ·  Sep 30")
+                        .font(theme::regular(14.0))
+                        .color(t.text2),
+                );
+            });
             ui.add_space(18.0);
             ui.label(
                 egui::RichText::new("Interface size")
@@ -412,6 +453,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             Act::Theme(name) => app.set_theme(&ctx, name),
             Act::Base(c) => app.open_modal(&ctx, Modal::Currency(forms::CurrencyForm::new(c))),
             Act::Scale(z) => app.set_ui_scale(&ctx, z),
+            Act::Font(name) => app.set_font(&ctx, name),
             Act::ScrollSpeed(v) => app.set_scroll_speed(v),
             Act::FxAuto(v) => {
                 app.toasts.ok(app.store.update_settings(|s| s.fx_auto = v));

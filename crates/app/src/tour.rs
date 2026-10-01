@@ -12,6 +12,7 @@ enum Extra {
     NewTxn,
     Palette(&'static str),
     Help,
+    Font(&'static str),
 }
 
 pub struct Tour {
@@ -43,6 +44,8 @@ impl Tour {
         steps.push((Page::Ledger, "Daylight", Extra::None));
         steps.push((Page::Budgets, "Paper", Extra::None));
         steps.push((Page::Reports, "Tokyo Night", Extra::None));
+        steps.push((Page::Settings, "Paper", Extra::Font("Plus Jakarta Sans")));
+        steps.push((Page::Dashboard, "Latte", Extra::Font("JetBrains Mono")));
         Some(Tour {
             dir,
             steps,
@@ -69,6 +72,7 @@ impl Tour {
                 Extra::NewTxn => app.modal = None,
                 Extra::Palette(_) => app.palette.open = false,
                 Extra::Help => app.modal = None,
+                Extra::Font(_) => app.set_font(ctx, "Inter"),
             }
             let name = format!(
                 "{:02}-{}-{}.png",
@@ -108,6 +112,7 @@ impl Tour {
                     app.open_modal(ctx, crate::forms::Modal::Txn(f));
                 }
                 Extra::Help => app.open_modal(ctx, crate::forms::Modal::Help),
+                Extra::Font(f) => app.set_font(ctx, f),
                 Extra::Palette(q) => {
                     app.palette.toggle(ctx);
                     app.palette.set_query(q);

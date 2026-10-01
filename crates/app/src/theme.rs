@@ -350,27 +350,114 @@ pub const PAD: i8 = 20;
 
 // ------------------------------------------------------------------- fonts
 
-pub fn install_fonts(ctx: &egui::Context) {
+/// An interface font bundled with Magpie (all SIL OFL licensed). Each is
+/// subset to the characters Magpie uses and has tabular digits baked in
+/// where the font provides them, so amounts line up in columns.
+pub struct UiFont {
+    pub name: &'static str,
+    pub mono: bool,
+    regular: &'static [u8],
+    medium: &'static [u8],
+    semibold: &'static [u8],
+    display: &'static [u8],
+}
+
+pub const FONTS: &[UiFont] = &[
+    UiFont {
+        name: "Inter",
+        mono: false,
+        regular: include_bytes!("../assets/fonts/Inter-Regular.ttf"),
+        medium: include_bytes!("../assets/fonts/Inter-Medium.ttf"),
+        semibold: include_bytes!("../assets/fonts/Inter-SemiBold.ttf"),
+        display: include_bytes!("../assets/fonts/InterDisplay-SemiBold.ttf"),
+    },
+    UiFont {
+        name: "Geist",
+        mono: false,
+        regular: include_bytes!("../assets/fonts/Geist-Regular.ttf"),
+        medium: include_bytes!("../assets/fonts/Geist-Medium.ttf"),
+        semibold: include_bytes!("../assets/fonts/Geist-SemiBold.ttf"),
+        display: include_bytes!("../assets/fonts/Geist-SemiBold.ttf"),
+    },
+    UiFont {
+        name: "Onest",
+        mono: false,
+        regular: include_bytes!("../assets/fonts/Onest-Regular.ttf"),
+        medium: include_bytes!("../assets/fonts/Onest-Medium.ttf"),
+        semibold: include_bytes!("../assets/fonts/Onest-SemiBold.ttf"),
+        display: include_bytes!("../assets/fonts/Onest-SemiBold.ttf"),
+    },
+    UiFont {
+        name: "Plus Jakarta Sans",
+        mono: false,
+        regular: include_bytes!("../assets/fonts/PlusJakartaSans-Regular.ttf"),
+        medium: include_bytes!("../assets/fonts/PlusJakartaSans-Medium.ttf"),
+        semibold: include_bytes!("../assets/fonts/PlusJakartaSans-SemiBold.ttf"),
+        display: include_bytes!("../assets/fonts/PlusJakartaSans-SemiBold.ttf"),
+    },
+    UiFont {
+        name: "DM Sans",
+        mono: false,
+        regular: include_bytes!("../assets/fonts/DMSans-Regular.ttf"),
+        medium: include_bytes!("../assets/fonts/DMSans-Medium.ttf"),
+        semibold: include_bytes!("../assets/fonts/DMSans-SemiBold.ttf"),
+        display: include_bytes!("../assets/fonts/DMSans-SemiBold.ttf"),
+    },
+    UiFont {
+        name: "Figtree",
+        mono: false,
+        regular: include_bytes!("../assets/fonts/Figtree-Regular.ttf"),
+        medium: include_bytes!("../assets/fonts/Figtree-Medium.ttf"),
+        semibold: include_bytes!("../assets/fonts/Figtree-SemiBold.ttf"),
+        display: include_bytes!("../assets/fonts/Figtree-SemiBold.ttf"),
+    },
+    UiFont {
+        name: "Outfit",
+        mono: false,
+        regular: include_bytes!("../assets/fonts/Outfit-Regular.ttf"),
+        medium: include_bytes!("../assets/fonts/Outfit-Medium.ttf"),
+        semibold: include_bytes!("../assets/fonts/Outfit-SemiBold.ttf"),
+        display: include_bytes!("../assets/fonts/Outfit-SemiBold.ttf"),
+    },
+    UiFont {
+        name: "IBM Plex Sans",
+        mono: false,
+        regular: include_bytes!("../assets/fonts/IBMPlexSans-Regular.ttf"),
+        medium: include_bytes!("../assets/fonts/IBMPlexSans-Medium.ttf"),
+        semibold: include_bytes!("../assets/fonts/IBMPlexSans-SemiBold.ttf"),
+        display: include_bytes!("../assets/fonts/IBMPlexSans-SemiBold.ttf"),
+    },
+    UiFont {
+        name: "JetBrains Mono",
+        mono: true,
+        regular: include_bytes!("../assets/fonts/JetBrainsMono-Regular.ttf"),
+        medium: include_bytes!("../assets/fonts/JetBrainsMono-Medium.ttf"),
+        semibold: include_bytes!("../assets/fonts/JetBrainsMono-SemiBold.ttf"),
+        display: include_bytes!("../assets/fonts/JetBrainsMono-SemiBold.ttf"),
+    },
+];
+
+pub fn font_by_name(name: &str) -> &'static UiFont {
+    FONTS.iter().find(|f| f.name == name).unwrap_or(&FONTS[0])
+}
+
+/// The egui family used to preview a font by name (e.g. in the picker).
+pub fn preview_family(name: &str) -> FontFamily {
+    FontFamily::Name(format!("preview:{name}").into())
+}
+
+/// Loads `font_name` as the interface font (plus small previews of every
+/// font for the Settings picker). Safe to call again to switch fonts live.
+pub fn install_fonts(ctx: &egui::Context, font_name: &str) {
+    let f = font_by_name(font_name);
     let mut fonts = FontDefinitions::default();
     let add = |fonts: &mut FontDefinitions, name: &str, bytes: &'static [u8]| {
         fonts.font_data.insert(name.into(), FontData::from_static(bytes).into());
     };
-    add(&mut fonts, "inter", include_bytes!("../assets/fonts/Inter-Regular.ttf"));
-    add(
-        &mut fonts,
-        "inter-medium",
-        include_bytes!("../assets/fonts/Inter-Medium.ttf"),
-    );
-    add(
-        &mut fonts,
-        "inter-semibold",
-        include_bytes!("../assets/fonts/Inter-SemiBold.ttf"),
-    );
-    add(
-        &mut fonts,
-        "inter-display",
-        include_bytes!("../assets/fonts/InterDisplay-SemiBold.ttf"),
-    );
+    add(&mut fonts, "ui", f.regular);
+    add(&mut fonts, "ui-medium", f.medium);
+    add(&mut fonts, "ui-semibold", f.semibold);
+    add(&mut fonts, "ui-display", f.display);
 
     let fallbacks: Vec<String> = fonts
         .families
@@ -382,16 +469,21 @@ pub fn install_fonts(ctx: &egui::Context) {
         v.extend(fallbacks.iter().cloned());
         v
     };
-    fonts.families.insert(FontFamily::Proportional, family("inter"));
+    fonts.families.insert(FontFamily::Proportional, family("ui"));
     fonts
         .families
-        .insert(FontFamily::Name("medium".into()), family("inter-medium"));
+        .insert(FontFamily::Name("medium".into()), family("ui-medium"));
     fonts
         .families
-        .insert(FontFamily::Name("semibold".into()), family("inter-semibold"));
+        .insert(FontFamily::Name("semibold".into()), family("ui-semibold"));
     fonts
         .families
-        .insert(FontFamily::Name("display".into()), family("inter-display"));
+        .insert(FontFamily::Name("display".into()), family("ui-display"));
+    for pf in FONTS {
+        let key = format!("preview:{}", pf.name);
+        add(&mut fonts, &key, pf.medium);
+        fonts.families.insert(preview_family(pf.name), family(&key));
+    }
 
     // Phosphor icons as a fallback in every family so icons mix into text.
     let phosphor = egui_phosphor::Variant::Regular.font_bytes();

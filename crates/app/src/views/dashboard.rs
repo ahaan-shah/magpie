@@ -212,7 +212,12 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     };
                     ui.label(w::faint(&t, per_day));
                 } else if let Some(r) = d.this.savings_rate() {
-                    ui.label(w::faint(&t, format!("{:.0}% of income", r * 100.0)));
+                    let text = if r < -1.0 {
+                        "more out than in so far".to_string()
+                    } else {
+                        format!("{:.0}% of income", r * 100.0)
+                    };
+                    ui.label(w::faint(&t, text));
                 }
             })
         });
@@ -914,6 +919,7 @@ fn review_card(ui: &mut Ui, t: &Theme, store: &Store, d: &Dash) {
             w::fmt_whole(r.totals.net(), base),
             r.totals
                 .savings_rate()
+                .filter(|x| *x >= -1.0)
                 .map(|x| format!("{:.0}% of income", x * 100.0))
                 .unwrap_or_default(),
             if r.totals.net() >= 0 { t.pos } else { t.neg },
