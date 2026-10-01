@@ -168,7 +168,13 @@ fn items(app: &mut App, q: &str) -> Vec<Item> {
         .filter_map(|i| fuzzy(q, &i.label).map(|s| (s, i)))
         .collect();
     scored.sort_by_key(|(s, _)| -*s);
-    scored.into_iter().map(|(_, i)| i).collect()
+    // The "search transactions for <query>" catch-all always goes last, so
+    // typing "paper" picks the Paper theme rather than a text search.
+    let q_lower = q.to_lowercase();
+    let is_fallback = |i: &Item| matches!(&i.cmd, Cmd::SearchLedger(x) if x.to_lowercase() == q_lower);
+    let (fallback, mut rest): (Vec<_>, Vec<_>) = scored.into_iter().map(|(_, i)| i).partition(is_fallback);
+    rest.extend(fallback);
+    rest
 }
 
 /// Subsequence match with bonuses for word starts and contiguous runs.

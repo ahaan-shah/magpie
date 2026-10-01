@@ -202,6 +202,7 @@ pub fn button(ui: &mut Ui, t: &Theme, kind: Kind, icon: Option<&str>, label: &st
         34.0f32.max(galley.size().y + pad.y * 2.0),
     );
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+    crate::marks::record(|| format!("btn:{label}"), rect);
     let hover = motion::toggle(ui.ctx(), resp.id.with("h"), resp.hovered(), motion::MICRO);
     let press = motion::toggle(ui.ctx(), resp.id.with("p"), resp.is_pointer_button_down_on(), 0.08);
     let rect = rect.shrink(press * 1.0);

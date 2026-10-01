@@ -28,6 +28,10 @@ to build.
 - `MAGPIE_DATA_DIR=<dir>` or `--data-dir <dir>` — use a different database.
 - `cargo run --release -p magpie-core --example bench 100000` — load-time
   benchmark with 100k transactions.
+- `cargo test --profile fast -p magpie-finance film -- --ignored --nocapture`
+  — renders a demo film (`docs/magpie-demo.mp4`, not committed) from the real
+  app on a virtual clock. The script (cursor, typing, camera, captions) lives
+  in `crates/app/src/film.rs`.
 
 ## Guidelines
 

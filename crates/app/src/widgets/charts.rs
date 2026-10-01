@@ -445,6 +445,7 @@ pub fn grouped_bars(
         pos2(rect.left() + 52.0, rect.top() + 6.0),
         pos2(rect.right() - 6.0, rect.bottom() - 24.0),
     );
+    crate::marks::record(|| format!("chart:{id:?}"), rect);
     let (min, max, step) = axis(lo.min(0.0), hi.max(0.0));
     let range = max - min;
     grid(ui, t, plot, max, step, min, fmt);

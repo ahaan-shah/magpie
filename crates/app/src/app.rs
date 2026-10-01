@@ -930,6 +930,7 @@ impl App {
 
 fn nav_item(ui: &mut Ui, t: &Theme, page: Page, active: bool, collapse: f32, h: f32) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
+    crate::marks::record(|| format!("nav:{}", page.title()), rect);
     let hover = motion::toggle(
         ui.ctx(),
         Id::new(("nav-h", page as u8)),

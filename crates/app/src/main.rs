@@ -20,6 +20,7 @@ mod diag;
 mod dialogs;
 mod forms;
 mod icons;
+mod marks;
 mod motion;
 mod palette;
 mod receipts_cache;
@@ -148,3 +149,6 @@ fn main() -> eframe::Result<()> {
 
 #[cfg(test)]
 mod monkey;
+
+#[cfg(test)]
+mod film;

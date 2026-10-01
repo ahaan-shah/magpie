@@ -346,8 +346,13 @@ pub const MONTH_NAMES: [&str; 12] = [
     "December",
 ];
 
+/// Today's date. `MAGPIE_TODAY=YYYY-MM-DD` pins it (screenshots, the demo
+/// film, reproducible bug reports).
 pub fn today() -> Date {
-    jiff::Zoned::now().date()
+    std::env::var("MAGPIE_TODAY")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or_else(|| jiff::Zoned::now().date())
 }
 
 #[cfg(test)]

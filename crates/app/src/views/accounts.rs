@@ -274,6 +274,7 @@ fn account_card(
     scroll_into_view: bool,
 ) {
     let resp = ui.interact(rect, Id::new(("acc-card", a.id)), Sense::click());
+    crate::marks::record(|| format!("acc:{}", a.name), rect);
     if scroll_into_view {
         ui.scroll_to_rect(rect, None);
     }

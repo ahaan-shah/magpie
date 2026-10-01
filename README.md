@@ -78,8 +78,11 @@ Each chart is animated and interactive.
 </tr>
 </table>
 
+<img src="docs/screenshots/themes.png" alt="Themes, fonts and interface size in Settings" width="900">
+
 **Everything else.**
 - 14 themes, 7 light (Daylight, Paper, Latte, Flexoki, Rosé Pine Dawn, Lupine, Snow) and 7 dark (Midnight, Tokyo Night, Mocha, Nord, Gruvbox, Kanagawa, Everforest), that crossfade when you switch.
+- 9 bundled interface fonts, including JetBrains Mono for a monospaced look.
 - A command palette (Ctrl+K), adjustable interface size and scroll speed, and keyboard shortcuts for everything (press `?`).
 - Export to CSV, Excel or JSON, plus one-click database backups.
 - Import from [Pear](https://github.com/ahaan-shah/pear), Magpie's terminal-based predecessor.

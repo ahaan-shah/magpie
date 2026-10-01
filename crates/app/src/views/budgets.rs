@@ -446,6 +446,7 @@ fn budget_row(
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 66.0), Sense::click());
     let (alpha, dy) = w::reveal(ui, app.shown_at, i + 1);
     let rect = rect.translate(vec2(0.0, dy));
+    crate::marks::record(|| format!("budget:{}", cat.name), rect);
     let open = app.budgets.open == Some(l.category);
     let h = motion::toggle(
         ui.ctx(),

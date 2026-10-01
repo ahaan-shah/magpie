@@ -340,6 +340,7 @@ fn legend(ui: &mut Ui, t: &Theme, items: &[(&str, Color32)]) {
 }
 
 fn hero(ui: &mut Ui, t: &Theme, rect: Rect, d: &Dash) {
+    crate::marks::record(|| "dash:hero".into(), rect);
     w::card_in(ui, t, rect, |ui| {
         let base = d.base;
         let prev = d.nw_series.iter().rev().nth(1).map(|x| x.1).unwrap_or(d.net_worth);

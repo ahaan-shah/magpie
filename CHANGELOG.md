@@ -4,6 +4,23 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] - 2026-10-01
+
+### Added
+- Font picker (Settings → Appearance and feel): Inter, Geist, Onest, Plus
+  Jakarta Sans, DM Sans, Figtree, Outfit, IBM Plex Sans and JetBrains Mono,
+  all bundled. Switches instantly.
+- A demo-film renderer that records the real app frame-by-frame with
+  scripted cursor, typing and camera moves (`crates/app/src/film.rs`).
+
+### Changed
+- A new high-resolution squircle logo.
+- In the command palette, "search transactions for …" always ranks last, so
+  typing a theme or page name picks it.
+
+### Fixed
+- Savings-rate subtitles no longer show absurd percentages early in a month.
+
 ## [0.1.1] - 2026-10-01
 
 ### Added
