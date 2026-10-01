@@ -75,7 +75,7 @@ Linux)
         # Vector icons only: sharp at any size and any display scale. Remove
         # PNGs from older installs so icon lookups can't pick a bitmap and
         # upscale it on HiDPI screens.
-        rm -f "$ICONS"/*/apps/magpie.png
+        rm -f "${ICONS:?}"/*/apps/magpie.png
         mkdir -p "$ICONS/scalable/apps"
         install -m 644 "$SRC/magpie.svg" "$ICONS/scalable/apps/magpie.svg"
         for s in 16 24; do
