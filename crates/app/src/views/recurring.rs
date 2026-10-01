@@ -239,12 +239,15 @@ fn rule_row(
         color,
     );
     let x = badge.right() + 12.0;
-    p.text(
+    let max_w = rect.right() - x - 130.0;
+    w::text_fit(
+        p,
         pos2(x, rect.center().y - 9.0),
         Align2::LEFT_CENTER,
         &r.payee,
         theme::medium(13.5),
         a(t.text),
+        max_w,
     );
     let mut sub = format!("{} · {}", recurring::describe(r), store.account_name(r.account));
     if !r.auto_post {
@@ -253,12 +256,14 @@ fn rule_row(
     if !r.active {
         sub.push_str(" · paused");
     }
-    p.text(
+    w::text_fit(
+        p,
         pos2(x, rect.center().y + 9.0),
         Align2::LEFT_CENTER,
         sub,
         theme::regular(11.5),
         a(t.text3),
+        max_w,
     );
     let cur = store.account_cur(r.account);
     let c = if r.amount > 0 { t.pos } else { t.text };

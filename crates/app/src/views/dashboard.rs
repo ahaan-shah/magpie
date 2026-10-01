@@ -412,17 +412,24 @@ fn this_month(ui: &mut Ui, t: &Theme, rect: Rect, d: &Dash) {
             t.hover,
         );
         let p = ui.painter();
+        // Early in a month (little or no income yet) the ratio is meaningless
+        // — e.g. "-5853%" — so show something readable instead.
+        let (big, small) = match d.this.savings_rate() {
+            None => ("—".to_string(), "no income yet"),
+            Some(r) if r < -1.0 => ("—".to_string(), "spent > income"),
+            Some(r) => (format!("{:.0}%", r * 100.0), "saved"),
+        };
         p.text(
             ring_c - vec2(0.0, 6.0),
             Align2::CENTER_CENTER,
-            format!("{:.0}%", rate * 100.0),
+            big,
             theme::display(19.0),
             t.text,
         );
         p.text(
             ring_c + vec2(0.0, 13.0),
             Align2::CENTER_CENTER,
-            "saved",
+            small,
             theme::regular(11.0),
             t.text3,
         );
@@ -656,14 +663,17 @@ fn upcoming_card(ui: &mut Ui, t: &Theme, store: &Store, d: &Dash, today: Date, a
                 cat.map(|c| icons::glyph(&c.icon)).unwrap_or(ph::REPEAT),
                 color,
             );
-            p.text(
+            w::text_fit(
+                p,
                 pos2(badge.right() + 12.0, rect.center().y - 8.0),
                 Align2::LEFT_CENTER,
                 &r.payee,
                 theme::medium(13.0),
                 t.text,
+                rect.right() - (badge.right() + 12.0) - 110.0,
             );
-            p.text(
+            w::text_fit(
+                p,
                 pos2(badge.right() + 12.0, rect.center().y + 9.0),
                 Align2::LEFT_CENTER,
                 {
@@ -677,6 +687,7 @@ fn upcoming_card(ui: &mut Ui, t: &Theme, store: &Store, d: &Dash, today: Date, a
                 },
                 theme::regular(11.5),
                 t.text3,
+                rect.right() - (badge.right() + 12.0) - 110.0,
             );
             let c = if r.amount > 0 { t.pos } else { t.text };
             p.text(
@@ -734,12 +745,14 @@ pub fn txn_row(ui: &mut Ui, t: &Theme, store: &Store, tx: &Txn, today: Date) -> 
         };
         w::paint_icon_badge(p, t, badge, glyph, color);
         let payee = if tx.payee.is_empty() { "—" } else { &tx.payee };
-        p.text(
+        w::text_fit(
+            p,
             pos2(badge.right() + 12.0, rect.center().y - 8.0),
             Align2::LEFT_CENTER,
             payee,
             theme::medium(13.0),
             t.text,
+            rect.right() - (badge.right() + 12.0) - 110.0,
         );
         let sub = format!(
             "{} · {}",
@@ -750,12 +763,14 @@ pub fn txn_row(ui: &mut Ui, t: &Theme, store: &Store, tx: &Txn, today: Date) -> 
             },
             w::day_label(tx.date, today)
         );
-        p.text(
+        w::text_fit(
+            p,
             pos2(badge.right() + 12.0, rect.center().y + 9.0),
             Align2::LEFT_CENTER,
             sub,
             theme::regular(11.5),
             t.text3,
+            rect.right() - (badge.right() + 12.0) - 110.0,
         );
         let c = if tx.amount > 0 { t.pos } else { t.text };
         p.text(
@@ -827,14 +842,17 @@ fn goals_card(ui: &mut Ui, t: &Theme, d: &Dash, acts: &mut Vec<Act>) {
             theme::regular(14.0),
             w::readable(t, color),
         );
-        p.text(
+        w::text_fit(
+            p,
             pos2(rect.left() + 58.0, rect.center().y - 9.0),
             Align2::LEFT_CENTER,
             &g.name,
             theme::medium(13.0),
             t.text,
+            rect.right() - (rect.left() + 58.0) - 110.0,
         );
-        p.text(
+        w::text_fit(
+            p,
             pos2(rect.left() + 58.0, rect.center().y + 9.0),
             Align2::LEFT_CENTER,
             format!(
@@ -844,6 +862,7 @@ fn goals_card(ui: &mut Ui, t: &Theme, d: &Dash, acts: &mut Vec<Act>) {
             ),
             theme::regular(11.5),
             t.text3,
+            rect.right() - (rect.left() + 58.0) - 110.0,
         );
         p.text(
             pos2(rect.right(), rect.center().y),

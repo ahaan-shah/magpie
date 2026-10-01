@@ -40,7 +40,16 @@ impl Dialogs {
         self.pending = Some((purpose, rx));
     }
 
+    /// No dialog when one is already open, or in headless tests (on macOS,
+    /// even *creating* a dialog off the main thread panics).
+    fn blocked(&self) -> bool {
+        self.busy() || crate::app::headless()
+    }
+
     pub fn pick(&mut self, ctx: &egui::Context, purpose: Purpose, title: &str, filter: (&str, &[&str])) {
+        if self.blocked() {
+            return;
+        }
         // The dialog is created on the UI thread (required on macOS) and only
         // awaited on the worker thread.
         let fut = rfd::AsyncFileDialog::new()
@@ -51,6 +60,9 @@ impl Dialogs {
     }
 
     pub fn save(&mut self, ctx: &egui::Context, purpose: Purpose, name: &str, filter: (&str, &[&str])) {
+        if self.blocked() {
+            return;
+        }
         let fut = rfd::AsyncFileDialog::new()
             .set_file_name(name)
             .add_filter(filter.0, filter.1)

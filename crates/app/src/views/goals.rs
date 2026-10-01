@@ -221,13 +221,15 @@ fn goal_card(
                 }
             });
         });
-        let center = pos2(rect.left() + 78.0, rect.top() + 118.0);
+        // Scale the ring with the card so narrow windows still fit the text.
+        let radius = (rect.width() * 0.13).clamp(30.0, 50.0);
+        let center = pos2(rect.left() + 28.0 + radius, rect.top() + 118.0);
         charts::ring(
             ui,
             Id::new(("goal-ring", g.id)),
             center,
-            50.0,
-            10.0,
+            radius,
+            radius * 0.2,
             s.fraction,
             color,
             t.hover,
@@ -249,11 +251,28 @@ fn goal_card(
             t.text,
         );
 
-        let x = rect.left() + 150.0;
+        let x = center.x + radius + 22.0;
+        let max_w = rect.right() - 20.0 - x;
         let mut y = rect.top() + 72.0;
         let mut line = |label: &str, value: String, c: egui::Color32| {
-            p.text(pos2(x, y), Align2::LEFT_TOP, label, theme::regular(11.5), t.text3);
-            p.text(pos2(x, y + 15.0), Align2::LEFT_TOP, value, theme::semibold(13.5), c);
+            w::text_fit(
+                p,
+                pos2(x, y),
+                Align2::LEFT_TOP,
+                label,
+                theme::regular(11.5),
+                t.text3,
+                max_w,
+            );
+            w::text_fit(
+                p,
+                pos2(x, y + 15.0),
+                Align2::LEFT_TOP,
+                value,
+                theme::semibold(13.5),
+                c,
+                max_w,
+            );
             y += 40.0;
         };
         line(

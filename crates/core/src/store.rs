@@ -21,6 +21,8 @@ pub struct Settings {
     pub default_account: Option<Id>,
     /// Interface zoom, 1.0 = 100%.
     pub ui_scale: f32,
+    /// Scroll-wheel speed multiplier, 1.0 = default.
+    pub scroll_speed: f32,
 }
 
 impl Default for Settings {
@@ -33,6 +35,7 @@ impl Default for Settings {
             onboarded: false,
             default_account: None,
             ui_scale: 1.0,
+            scroll_speed: 1.0,
         }
     }
 }
@@ -109,6 +112,9 @@ impl Store {
         settings.default_account = db.setting("default_account")?.and_then(|v| v.parse().ok());
         if let Some(v) = db.setting("ui_scale")?.and_then(|v| v.parse::<f32>().ok()) {
             settings.ui_scale = v.clamp(0.6, 2.0);
+        }
+        if let Some(v) = db.setting("scroll_speed")?.and_then(|v| v.parse::<f32>().ok()) {
+            settings.scroll_speed = v.clamp(0.25, 4.0);
         }
 
         let mut rates = Rates::defaults();
@@ -191,6 +197,7 @@ impl Store {
         }
         db.set_setting("onboarded", if s.onboarded { "1" } else { "0" })?;
         db.set_setting("ui_scale", &format!("{:.2}", s.ui_scale))?;
+        db.set_setting("scroll_speed", &format!("{:.2}", s.scroll_speed))?;
         if let Some(a) = s.default_account {
             db.set_setting("default_account", &a.to_string())?;
         }

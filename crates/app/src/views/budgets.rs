@@ -497,12 +497,14 @@ fn budget_row(
         sub.push_str("  ·  this month only");
     }
     let name_w = p.layout_no_wrap(cat.name.clone(), theme::medium(14.0), t.text).size().x;
-    p.text(
+    w::text_fit(
+        &p,
         pos2(x + name_w + 10.0, inner.top() + 8.0),
         Align2::LEFT_CENTER,
         sub,
         theme::regular(12.0),
         a(t.text3),
+        inner.right() - right_w - 16.0 - (x + name_w + 10.0),
     );
     let used = l.used();
     let is_now = m == Month::of(today);

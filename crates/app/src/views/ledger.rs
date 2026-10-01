@@ -285,6 +285,10 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let t = app.t();
     let ctx = ui.ctx().clone();
     let mut acts: Vec<Act> = Vec::new();
+    // Everything on this page stays within the page width, even if a filter
+    // row overflows (which would otherwise widen the table off-screen).
+    let page = ui.max_rect();
+    ui.set_clip_rect(page.intersect(ui.clip_rect()));
 
     quick_add(app, ui, &t);
     ui.add_space(12.0);
@@ -336,7 +340,8 @@ pub fn show(app: &mut App, ui: &mut Ui) {
 
     let detail_open = app.ledger.selected_one().is_some();
     let k = motion::toggle(&ctx, Id::new("ledger-detail"), detail_open, motion::STANDARD);
-    let full = ui.available_rect_before_wrap();
+    let avail = ui.available_rect_before_wrap();
+    let full = Rect::from_min_max(avail.min, pos2(page.right().min(avail.right()), avail.bottom()));
     let panel_w = 340.0 * k;
     let table_rect = Rect::from_min_max(
         full.min,
@@ -612,101 +617,113 @@ fn prefill(app: &mut App, f: forms::TxnForm) -> forms::TxnForm {
 
 fn filters(app: &mut App, ui: &mut Ui, t: &Theme, acts: &mut Vec<Act>) {
     let store = &app.store;
+    let today = app.today;
     let st = &mut app.ledger;
-    ui.horizontal_wrapped(|ui| {
-        let sid = Id::new("ledger-search");
-        if st.focus_search {
-            ui.memory_mut(|m| m.request_focus(sid));
-            st.focus_search = false;
-        }
-        w::text_field(
-            ui,
-            t,
-            sid,
-            &mut st.search,
-            &format!("{}  Search payee, note, #tag, amount…", ph::MAGNIFYING_GLASS),
-            280.0,
-        );
-
-        let range_label = format!("{}  {}", ph::CALENDAR_BLANK, st.range.label());
-        w::dropdown(ui, "ledger-range", range_label, 150.0, |ui| {
-            for r in [
-                Range::ThisMonth,
-                Range::LastMonth,
-                Range::Last90,
-                Range::ThisYear,
-                Range::All,
-            ] {
-                ui.selectable_value(&mut st.range, r, r.label());
-            }
-            ui.separator();
-            let now = Month::of(app.today);
-            for k in 0..12 {
-                let m = now.add(-k);
-                ui.selectable_value(&mut st.range, Range::Month(m), m.label());
-            }
+    let sid = Id::new("ledger-search");
+    if st.focus_search {
+        ui.memory_mut(|m| m.request_focus(sid));
+        st.focus_search = false;
+    }
+    let hint = format!("{}  Search payee, note, #tag, amount…", ph::MAGNIFYING_GLASS);
+    // One row when there's room; two deliberate rows otherwise (wrapping
+    // mis-measures dropdowns and pushed them off the edge).
+    if ui.available_width() >= 1180.0 {
+        ui.horizontal(|ui| {
+            w::text_field(ui, t, sid, &mut st.search, &hint, 280.0);
+            filter_dropdowns(ui, store, st, today);
+            filter_actions(ui, t, st, acts);
         });
-
-        let acc_label = st
-            .account
-            .and_then(|a| store.account(a))
-            .map(|a| a.name.clone())
-            .unwrap_or_else(|| "All accounts".into());
-        w::dropdown(ui, "ledger-acc", format!("{}  {acc_label}", ph::WALLET), 160.0, |ui| {
-            ui.selectable_value(&mut st.account, None, "All accounts");
-            for a in store.accounts() {
-                ui.selectable_value(
-                    &mut st.account,
-                    Some(a.id),
-                    format!("{}  {}", icons::account_kind(a.kind), a.name),
-                );
-            }
+    } else {
+        ui.horizontal(|ui| {
+            let w_search = (ui.available_width() - 460.0).clamp(200.0, 420.0);
+            w::text_field(ui, t, sid, &mut st.search, &hint, w_search);
+            filter_actions(ui, t, st, acts);
         });
+        ui.horizontal(|ui| filter_dropdowns(ui, store, st, today));
+    }
+}
 
-        let cat_label = match st.cat {
-            CatFilter::Any => "All categories".to_string(),
-            CatFilter::Uncategorized => "Uncategorized".into(),
-            CatFilter::Is(c) => store.category_name(Some(c)).to_string(),
-        };
-        w::dropdown(ui, "ledger-cat", format!("{}  {cat_label}", ph::TAG), 160.0, |ui| {
-            ui.selectable_value(&mut st.cat, CatFilter::Any, "All categories");
-            ui.selectable_value(&mut st.cat, CatFilter::Uncategorized, "Uncategorized");
-            for c in store.categories() {
-                ui.selectable_value(
-                    &mut st.cat,
-                    CatFilter::Is(c.id),
-                    format!("{}  {}", icons::glyph(&c.icon), c.name),
-                );
-            }
-        });
-
-        w::segmented(
-            ui,
-            t,
-            Id::new("ledger-kind"),
-            &mut st.kind,
-            &["All", "Out", "In", "Transfers"],
-        );
-
-        let filtered = !st.search.is_empty()
-            || st.range != Range::All
-            || st.account.is_some()
-            || st.cat != CatFilter::Any
-            || st.kind != 0;
-        if filtered && w::ghost(ui, t, Some(ph::X), "Clear").clicked() {
-            st.search.clear();
-            st.range = Range::All;
-            st.account = None;
-            st.cat = CatFilter::Any;
-            st.kind = 0;
+fn filter_dropdowns(ui: &mut Ui, store: &Store, st: &mut State, today: Date) {
+    let app_today = today;
+    let range_label = format!("{}  {}", ph::CALENDAR_BLANK, st.range.label());
+    w::dropdown(ui, "ledger-range", range_label, 150.0, |ui| {
+        for r in [
+            Range::ThisMonth,
+            Range::LastMonth,
+            Range::Last90,
+            Range::ThisYear,
+            Range::All,
+        ] {
+            ui.selectable_value(&mut st.range, r, r.label());
         }
-        if w::icon_button(ui, t, ph::UPLOAD_SIMPLE, "Import a bank CSV").clicked() {
-            acts.push(Act::ImportCsv);
-        }
-        if w::icon_button(ui, t, ph::DOWNLOAD_SIMPLE, "Export these transactions (CSV)").clicked() {
-            acts.push(Act::Export);
+        ui.separator();
+        let now = Month::of(app_today);
+        for k in 0..12 {
+            let m = now.add(-k);
+            ui.selectable_value(&mut st.range, Range::Month(m), m.label());
         }
     });
+
+    let acc_label = st
+        .account
+        .and_then(|a| store.account(a))
+        .map(|a| a.name.clone())
+        .unwrap_or_else(|| "All accounts".into());
+    w::dropdown(ui, "ledger-acc", format!("{}  {acc_label}", ph::WALLET), 160.0, |ui| {
+        ui.selectable_value(&mut st.account, None, "All accounts");
+        for a in store.accounts() {
+            ui.selectable_value(
+                &mut st.account,
+                Some(a.id),
+                format!("{}  {}", icons::account_kind(a.kind), a.name),
+            );
+        }
+    });
+
+    let cat_label = match st.cat {
+        CatFilter::Any => "All categories".to_string(),
+        CatFilter::Uncategorized => "Uncategorized".into(),
+        CatFilter::Is(c) => store.category_name(Some(c)).to_string(),
+    };
+    w::dropdown(ui, "ledger-cat", format!("{}  {cat_label}", ph::TAG), 160.0, |ui| {
+        ui.selectable_value(&mut st.cat, CatFilter::Any, "All categories");
+        ui.selectable_value(&mut st.cat, CatFilter::Uncategorized, "Uncategorized");
+        for c in store.categories() {
+            ui.selectable_value(
+                &mut st.cat,
+                CatFilter::Is(c.id),
+                format!("{}  {}", icons::glyph(&c.icon), c.name),
+            );
+        }
+    });
+}
+
+fn filter_actions(ui: &mut Ui, t: &Theme, st: &mut State, acts: &mut Vec<Act>) {
+    w::segmented(
+        ui,
+        t,
+        Id::new("ledger-kind"),
+        &mut st.kind,
+        &["All", "Out", "In", "Transfers"],
+    );
+    let filtered = !st.search.is_empty()
+        || st.range != Range::All
+        || st.account.is_some()
+        || st.cat != CatFilter::Any
+        || st.kind != 0;
+    if filtered && w::ghost(ui, t, Some(ph::X), "Clear").clicked() {
+        st.search.clear();
+        st.range = Range::All;
+        st.account = None;
+        st.cat = CatFilter::Any;
+        st.kind = 0;
+    }
+    if w::icon_button(ui, t, ph::UPLOAD_SIMPLE, "Import a bank CSV").clicked() {
+        acts.push(Act::ImportCsv);
+    }
+    if w::icon_button(ui, t, ph::DOWNLOAD_SIMPLE, "Export these transactions (CSV)").clicked() {
+        acts.push(Act::Export);
+    }
 }
 
 // -------------------------------------------------------------- table

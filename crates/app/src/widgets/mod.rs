@@ -86,9 +86,20 @@ pub fn card_scroll<R>(
 /// report pixels, not lines) also feel snappier.
 pub const SCROLL_BOOST: f32 = 1.3;
 
+/// The user's scroll speed multiplier (Settings), stored as f32 bits.
+static SCROLL_SPEED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0x3F80_0000); // 1.0
+
+pub fn set_scroll_speed(v: f32) {
+    SCROLL_SPEED.store(v.clamp(0.25, 4.0).to_bits(), std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn scroll_speed() -> f32 {
+    f32::from_bits(SCROLL_SPEED.load(std::sync::atomic::Ordering::Relaxed))
+}
+
 /// A vertical scroll area with Magpie's scroll speed.
 pub fn scroll_area() -> egui::ScrollArea {
-    egui::ScrollArea::vertical().wheel_scroll_multiplier(vec2(1.0, SCROLL_BOOST))
+    egui::ScrollArea::vertical().wheel_scroll_multiplier(vec2(1.0, SCROLL_BOOST * scroll_speed()))
 }
 
 /// Card title row: title on the left, optional right-hand content.
@@ -849,4 +860,92 @@ pub fn radial_glow(p: &egui::Painter, center: egui::Pos2, radius: f32, color: Co
         }
     }
     p.add(egui::Shape::mesh(mesh));
+}
+
+/// A styled horizontal slider. `marks` draws small ticks (e.g. the default).
+pub fn slider(
+    ui: &mut Ui,
+    t: &Theme,
+    id: Id,
+    value: &mut f32,
+    range: std::ops::RangeInclusive<f32>,
+    marks: &[f32],
+    width: f32,
+) -> Response {
+    let (rect, mut resp) = ui.allocate_exact_size(vec2(width, 28.0), Sense::click_and_drag());
+    let (lo, hi) = (*range.start(), *range.end());
+    let track = Rect::from_center_size(rect.center(), vec2(rect.width() - 20.0, 6.0));
+    if (resp.dragged() || resp.clicked())
+        && let Some(p) = resp.interact_pointer_pos()
+    {
+        let f = ((p.x - track.left()) / track.width()).clamp(0.0, 1.0);
+        let v = lo + f * (hi - lo);
+        let v = (v * 20.0).round() / 20.0;
+        if (v - *value).abs() > f32::EPSILON {
+            *value = v;
+            resp.mark_changed();
+        }
+    }
+    let f = ((*value - lo) / (hi - lo)).clamp(0.0, 1.0);
+    let shown = motion::tween(ui.ctx(), id.with("pos"), f, 0.08);
+    let hover = motion::toggle(ui.ctx(), id.with("h"), resp.hovered() || resp.dragged(), motion::MICRO);
+    let p = ui.painter();
+    p.rect_filled(track, CornerRadius::same(3), t.hover);
+    let filled = Rect::from_min_max(
+        track.min,
+        egui::pos2(track.left() + track.width() * shown, track.bottom()),
+    );
+    p.rect_filled(filled, CornerRadius::same(3), t.accent);
+    for m in marks {
+        let x = track.left() + track.width() * ((m - lo) / (hi - lo)).clamp(0.0, 1.0);
+        p.line_segment(
+            [egui::pos2(x, track.top() - 5.0), egui::pos2(x, track.bottom() + 5.0)],
+            Stroke::new(1.5, t.text3),
+        );
+    }
+    let knob = egui::pos2(track.left() + track.width() * shown, track.center().y);
+    p.circle_filled(knob + vec2(0.0, 1.0), 9.0 + 1.5 * hover, Color32::from_black_alpha(40));
+    p.circle(knob, 8.5 + 1.5 * hover, t.card, Stroke::new(2.0, t.accent));
+    resp.on_hover_cursor(egui::CursorIcon::Grab)
+}
+
+/// Shortens `text` with an ellipsis so it fits in `max_w` points.
+pub fn elide(p: &egui::Painter, text: &str, font: &egui::FontId, max_w: f32) -> String {
+    let width = |s: &str| p.layout_no_wrap(s.to_string(), font.clone(), Color32::WHITE).size().x;
+    if max_w <= 0.0 {
+        return String::new();
+    }
+    if width(text) <= max_w {
+        return text.to_string();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let (mut lo, mut hi) = (0usize, chars.len());
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        let candidate: String = chars[..mid].iter().collect::<String>().trim_end().to_string() + "…";
+        if width(&candidate) <= max_w {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    if lo == 0 {
+        return "…".into();
+    }
+    chars[..lo].iter().collect::<String>().trim_end().to_string() + "…"
+}
+
+/// Paints text that never spills past `max_w` (ellipsized instead).
+#[allow(clippy::too_many_arguments)]
+pub fn text_fit(
+    p: &egui::Painter,
+    pos: egui::Pos2,
+    align: Align2,
+    text: impl AsRef<str>,
+    font: egui::FontId,
+    color: Color32,
+    max_w: f32,
+) -> Rect {
+    let s = elide(p, text.as_ref(), &font, max_w);
+    p.text(pos, align, s, font, color)
 }

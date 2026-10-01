@@ -19,6 +19,7 @@ pub struct State {
 enum Act {
     Theme(&'static str),
     Scale(f32),
+    ScrollSpeed(f32),
     Base(Cur),
     FxAuto(bool),
     RefreshFx,
@@ -74,17 +75,22 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     section(
         ui,
         &t,
-        "Appearance",
+        "Appearance and feel",
         "Pick a look (← → to flip through). Switching crossfades smoothly.",
         |ui| {
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing = vec2(12.0, 12.0);
-                for th in THEMES {
-                    if theme_tile(ui, &t, th, th.name == current_theme).clicked() {
-                        acts.push(Act::Theme(th.name));
+            for (label, dark) in [("LIGHT", false), ("DARK", true)] {
+                ui.label(w::faint(&t, label));
+                ui.add_space(4.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = vec2(12.0, 12.0);
+                    for th in THEMES.iter().filter(|th| th.dark == dark) {
+                        if theme_tile(ui, &t, th, th.name == current_theme).clicked() {
+                            acts.push(Act::Theme(th.name));
+                        }
                     }
-                }
-            });
+                });
+                ui.add_space(10.0);
+            }
             ui.add_space(18.0);
             ui.label(
                 egui::RichText::new("Interface size")
@@ -134,6 +140,34 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 );
                 if w::icon_button(ui, &t, ph::PLUS, "Bigger").clicked() {
                     acts.push(Act::Scale(zoom + 0.05));
+                }
+            });
+            ui.add_space(18.0);
+            ui.label(
+                egui::RichText::new("Scroll speed")
+                    .font(theme::semibold(14.0))
+                    .color(t.text),
+            );
+            ui.label(w::subtle(
+                &t,
+                "How far each notch of the scroll wheel (or touchpad swipe) moves.",
+            ));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.label(w::faint(&t, "Slower"));
+                let mut v = w::scroll_speed();
+                if w::slider(ui, &t, egui::Id::new("scroll-speed"), &mut v, 0.25..=3.0, &[1.0], 320.0).changed() {
+                    acts.push(Act::ScrollSpeed(v));
+                }
+                ui.label(w::faint(&t, "Faster"));
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new(format!("{:.2}×", w::scroll_speed()))
+                        .font(theme::semibold(13.5))
+                        .color(t.text),
+                );
+                if (w::scroll_speed() - 1.0).abs() > 0.01 && w::ghost(ui, &t, None, "Reset").clicked() {
+                    acts.push(Act::ScrollSpeed(1.0));
                 }
             });
         },
@@ -378,6 +412,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             Act::Theme(name) => app.set_theme(&ctx, name),
             Act::Base(c) => app.open_modal(&ctx, Modal::Currency(forms::CurrencyForm::new(c))),
             Act::Scale(z) => app.set_ui_scale(&ctx, z),
+            Act::ScrollSpeed(v) => app.set_scroll_speed(v),
             Act::FxAuto(v) => {
                 app.toasts.ok(app.store.update_settings(|s| s.fx_auto = v));
             }

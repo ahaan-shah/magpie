@@ -79,8 +79,8 @@ Each chart is animated and interactive.
 </table>
 
 **Everything else.**
-- 8 themes (Midnight, Daylight, Tokyo Night, Mocha, Nord, Rosé Pine, Gruvbox, Paper) that crossfade when you switch.
-- A command palette (Ctrl+K).
+- 14 themes, 7 light (Daylight, Paper, Latte, Flexoki, Rosé Pine Dawn, Lupine, Snow) and 7 dark (Midnight, Tokyo Night, Mocha, Nord, Gruvbox, Kanagawa, Everforest), that crossfade when you switch.
+- A command palette (Ctrl+K), adjustable interface size and scroll speed, and keyboard shortcuts for everything (press `?`).
 - Export to CSV, Excel or JSON, plus one-click database backups.
 - Import from Pear, Magpie's terminal-based predecessor.
 

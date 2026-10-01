@@ -144,6 +144,7 @@ impl App {
             .and_then(|z| z.parse::<f32>().ok())
             .unwrap_or(store.settings().ui_scale);
         ctx.set_zoom_factor(zoom.clamp(0.5, 3.0));
+        widgets::set_scroll_speed(store.settings().scroll_speed);
         let theme = ThemeState::new(ctx, &store.settings().theme);
         let today = magpie_core::today();
         let mut toasts = Toasts::default();
@@ -241,6 +242,13 @@ impl App {
         ctx.set_zoom_factor(scale);
         crate::diag::crumb(format!("ui scale {scale}"));
         let r = self.store.update_settings(|s| s.ui_scale = scale);
+        self.toasts.ok(r);
+    }
+
+    /// Sets and remembers the scroll-wheel speed multiplier.
+    pub fn set_scroll_speed(&mut self, v: f32) {
+        widgets::set_scroll_speed(v);
+        let r = self.store.update_settings(|s| s.scroll_speed = widgets::scroll_speed());
         self.toasts.ok(r);
     }
 
@@ -546,22 +554,62 @@ impl App {
 
                 // Bottom section
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-                    ui.horizontal(|ui| {
-                        let glyph = if self.collapsed { ph::CARET_RIGHT } else { ph::SIDEBAR };
-                        if widgets::icon_button(ui, &t, glyph, if self.collapsed { "Expand" } else { "Collapse" })
-                            .clicked()
-                        {
-                            self.collapsed = !self.collapsed;
-                        }
-                        if k < 0.5 {
-                            let dark = t.dark;
-                            let glyph = if dark { ph::SUN } else { ph::MOON };
-                            if widgets::icon_button(ui, &t, glyph, "Toggle light / dark").clicked() {
-                                let name = if dark { "Daylight" } else { "Midnight" };
-                                self.set_theme(&ctx, name);
-                            }
-                        }
-                    });
+                    // Collapse + light/dark toggles. Collapsed, they stack and
+                    // centre on the icon column; expanded, they sit in a row
+                    // whose first button lines up with the nav icons.
+                    let collapsed_now = k > 0.5;
+                    let full = ui.max_rect();
+                    let btn = 30.0;
+                    let strip_h = if collapsed_now { btn * 2.0 + 6.0 } else { btn };
+                    let (strip, _) = ui.allocate_exact_size(vec2(full.width(), strip_h), Sense::hover());
+                    let icon_cx = motion::lerp(strip.left() + 23.0, strip.center().x, k);
+                    let dark = t.dark;
+                    let toggle_glyph = if self.collapsed || narrow {
+                        ph::CARET_CIRCLE_DOUBLE_RIGHT
+                    } else {
+                        ph::CARET_CIRCLE_DOUBLE_LEFT
+                    };
+                    let theme_glyph = if dark { ph::SUN } else { ph::MOON };
+                    let (collapse_rect, theme_rect) = if collapsed_now {
+                        (
+                            Rect::from_center_size(pos2(icon_cx, strip.bottom() - btn / 2.0), vec2(btn, btn)),
+                            Rect::from_center_size(pos2(icon_cx, strip.top() + btn / 2.0), vec2(btn, btn)),
+                        )
+                    } else {
+                        (
+                            Rect::from_center_size(pos2(icon_cx, strip.center().y), vec2(btn, btn)),
+                            Rect::from_center_size(pos2(icon_cx + btn + 8.0, strip.center().y), vec2(btn, btn)),
+                        )
+                    };
+                    let tip = if narrow {
+                        "The window is narrow, so the sidebar stays compact"
+                    } else if self.collapsed {
+                        concat!("Expand sidebar (", shortcut!("B"), ")")
+                    } else {
+                        concat!("Collapse sidebar (", shortcut!("B"), ")")
+                    };
+                    let collapse = ui
+                        .scope_builder(egui::UiBuilder::new().max_rect(collapse_rect), |ui| {
+                            widgets::icon_button(ui, &t, toggle_glyph, tip)
+                        })
+                        .inner;
+                    if collapse.clicked() && !narrow {
+                        self.collapsed = !self.collapsed;
+                    }
+                    let theme_btn = ui
+                        .scope_builder(egui::UiBuilder::new().max_rect(theme_rect), |ui| {
+                            widgets::icon_button(
+                                ui,
+                                &t,
+                                theme_glyph,
+                                concat!("Toggle light / dark (", shortcut!("Shift L"), ")"),
+                            )
+                        })
+                        .inner;
+                    if theme_btn.clicked() {
+                        let name = if dark { "Daylight" } else { "Midnight" };
+                        self.set_theme(&ctx, name);
+                    }
                     ui.add_space(4.0);
                     if nav_item(ui, &t, Page::Settings, self.page == Page::Settings, k, item_h).clicked() {
                         self.go(&ctx, Page::Settings);
@@ -930,17 +978,18 @@ fn nav_item(ui: &mut Ui, t: &Theme, page: Page, active: bool, collapse: f32, h: 
         ))
 }
 
-/// The Magpie mark: a rounded tile with an accent gradient and a bird.
-pub fn logo(p: &egui::Painter, r: Rect, t: &Theme) {
-    let top = motion::lerp_color(t.accent, Color32::WHITE, 0.2);
-    let bottom = motion::lerp_color(t.accent, Color32::BLACK, 0.2);
-    widgets::rounded_gradient(p, r, 10.0, top, bottom);
+/// The Magpie mark: the brand-orange tile with a white bird. Always orange
+/// (it's the app icon too), whatever the theme.
+pub fn logo(p: &egui::Painter, r: Rect, _t: &Theme) {
+    let top = Color32::from_rgb(0xE4, 0x81, 0x4F);
+    let bottom = Color32::from_rgb(0xA8, 0x4D, 0x22);
+    widgets::rounded_gradient(p, r, r.width() * 0.29, top, bottom);
     p.text(
         r.center() + vec2(0.0, 0.5),
         Align2::CENTER_CENTER,
         ph::BIRD,
-        theme::regular(20.0),
-        t.on_accent,
+        theme::regular(r.width() * 0.59),
+        Color32::WHITE,
     );
 }
 

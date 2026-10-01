@@ -279,12 +279,14 @@ fn category_table(ui: &mut Ui, t: &Theme, store: &Store, d: &Data, base: Cur, n:
             cat.map(|c| icons::glyph(&c.icon)).unwrap_or(ph::TAG),
             color,
         );
-        p.text(
+        w::text_fit(
+            p,
             pos2(badge.right() + 10.0, r.center().y),
             Align2::LEFT_CENTER,
             store.category_name(*c),
             theme::medium(13.0),
             t.text,
+            r.left() + wdt * 0.36 - badge.right() - 18.0,
         );
         let frac = *v as f32 / total.max(1) as f32;
         let bar = Rect::from_min_size(pos2(r.left() + wdt * 0.36, r.center().y - 3.0), vec2(wdt * 0.2, 6.0));
@@ -327,12 +329,14 @@ fn payees(ui: &mut Ui, t: &Theme, d: &Data, base: Cur) {
     for (i, (name, v, count)) in d.payees.iter().enumerate() {
         let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 38.0), Sense::hover());
         let p = ui.painter();
-        p.text(
+        w::text_fit(
+            p,
             pos2(r.left(), r.center().y - 7.0),
             Align2::LEFT_CENTER,
             name,
             theme::medium(13.0),
             t.text,
+            r.width() - 110.0,
         );
         p.text(
             pos2(r.left(), r.center().y + 9.0),

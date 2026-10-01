@@ -4,6 +4,26 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-10-01
+
+### Added
+- Seven new themes from the Omarchy palettes, balanced 7 light / 7 dark:
+  Latte, Flexoki, Rosé Pine Dawn, Lupine, Snow, Kanagawa and Everforest.
+  Settings groups themes into Light and Dark.
+- Scroll speed slider in Settings → Appearance and feel.
+
+### Changed
+- The Magpie logo and app icon are now brand orange.
+- The sidebar's collapse button is a rounded « / » and lines up with the
+  other icons when the sidebar is compact.
+
+### Fixed
+- Text no longer runs off cards in smaller windows (goals, dashboard,
+  recurring, reports and budget rows shorten with "…"); goal cards scale
+  their ring to fit; the Transactions filters and table stay on screen.
+- The month ring no longer shows nonsense like "-5853% saved" early in a
+  month.
+
 ## [0.1.0] - 2026-10-01
 
 First release.
