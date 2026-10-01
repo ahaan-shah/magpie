@@ -68,10 +68,25 @@ Linux)
 
     BIN_DIR="${MAGPIE_INSTALL_DIR:-$HOME/.local/bin}"
     DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
-    mkdir -p "$BIN_DIR" "$DATA/applications" "$DATA/icons/hicolor/512x512/apps" "$DATA/icons/hicolor/scalable/apps"
+    ICONS="$DATA/icons/hicolor"
+    mkdir -p "$BIN_DIR" "$DATA/applications"
     install -m 755 "$SRC/magpie" "$BIN_DIR/magpie"
-    install -m 644 "$SRC/magpie.png" "$DATA/icons/hicolor/512x512/apps/magpie.png"
-    [ -f "$SRC/magpie.svg" ] && install -m 644 "$SRC/magpie.svg" "$DATA/icons/hicolor/scalable/apps/magpie.svg"
+    if [ -f "$SRC/magpie.svg" ]; then
+        # Vector icons only: sharp at any size and any display scale. Remove
+        # PNGs from older installs so icon lookups can't pick a bitmap and
+        # upscale it on HiDPI screens.
+        rm -f "$ICONS"/*/apps/magpie.png
+        mkdir -p "$ICONS/scalable/apps"
+        install -m 644 "$SRC/magpie.svg" "$ICONS/scalable/apps/magpie.svg"
+        for s in 16 24; do
+            [ -f "$SRC/magpie-$s.svg" ] || continue
+            mkdir -p "$ICONS/${s}x${s}/apps"
+            install -m 644 "$SRC/magpie-$s.svg" "$ICONS/${s}x${s}/apps/magpie.svg"
+        done
+    else
+        mkdir -p "$ICONS/512x512/apps"
+        install -m 644 "$SRC/magpie.png" "$ICONS/512x512/apps/magpie.png"
+    fi
     sed "s|^Exec=magpie|Exec=$BIN_DIR/magpie|" "$SRC/magpie.desktop" >"$DATA/applications/magpie.desktop"
     command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q "$DATA/applications" || true
     command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -t "$DATA/icons/hicolor" 2>/dev/null || true

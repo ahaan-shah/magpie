@@ -178,17 +178,33 @@ fn grid(ui: &Ui, t: &Theme, plot: Rect, max: f32, step: f32, min: f32, fmt: &dyn
     }
 }
 
+/// Draws every `every`-th label, thinning further when labels would collide
+/// (31 daily bars in a narrow card), and the last one when it fits.
 fn x_labels(ui: &Ui, t: &Theme, plot: Rect, labels: &[String], xs: &[f32], every: usize) {
     let p = ui.painter();
+    let font = theme::regular(11.0);
+    let widest = labels
+        .iter()
+        .map(|l| p.layout_no_wrap(l.clone(), font.clone(), t.text3).size().x)
+        .fold(0.0f32, f32::max);
+    let step = if xs.len() > 1 {
+        (xs[xs.len() - 1] - xs[0]) / (xs.len() - 1) as f32
+    } else {
+        f32::INFINITY
+    };
+    let every = every.max((((widest + 10.0) / step.max(1.0)).ceil() as usize).max(1));
+    let mut last_x = f32::NEG_INFINITY;
     for (i, (l, x)) in labels.iter().zip(xs).enumerate() {
-        if i % every.max(1) == 0 || i + 1 == labels.len() {
+        let tail = i + 1 == labels.len() && *x - last_x >= widest + 10.0;
+        if i % every == 0 || tail {
             p.text(
                 pos2(*x, plot.bottom() + 8.0),
                 Align2::CENTER_TOP,
                 l,
-                theme::regular(11.0),
+                font.clone(),
                 t.text3,
             );
+            last_x = *x;
         }
     }
 }

@@ -4,6 +4,23 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] - 2026-10-01
+
+### Added
+- Reports: "This month", 3, 6 and 12 months, year to date, and a custom
+  range with from and till dates (till follows today unless you set it).
+  Periods of about a month chart by day, about a quarter by week, longer by
+  month; averages switch between per day and per month to match.
+
+### Changed
+- The logo is a plain-vector SVG on Linux: no PNGs, so it's sharp at any size
+  and display scale (docks and app switchers on 2× screens were upscaling a
+  bitmap). It avoids filters and clip paths, so Qt, GTK and browsers all draw
+  it identically, and has hinted versions for 16 and 24 px. The installer
+  removes PNG icons left by older versions.
+- Chart axis labels thin themselves out instead of overlapping.
+- A savings rate below -100% reads "Spent 2.7× income" instead of "-170%".
+
 ## [0.1.2] - 2026-10-01
 
 ### Added

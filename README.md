@@ -40,6 +40,7 @@ in a native app that opens instantly and sits at 0% CPU when idle.
 <img src="docs/screenshots/budgets.png" alt="Budgets" width="900">
 
 **Reports.**
+- Any period: this month, the last 3, 6 or 12 months, year to date, or a custom from–till range. A single month charts day by day.
 - Income vs spending
 - Net worth over time
 - Spending by category over time
@@ -99,7 +100,7 @@ What the script does on each platform:
 - **Linux:** installs `magpie` into `~/.local/bin`, and adds a desktop entry and icon so Magpie shows up in your app launcher.
 - **macOS:** installs `Magpie.app` (universal, Apple Silicon + Intel) into `/Applications`.
 
-To pin a version, set `MAGPIE_VERSION=0.1.0`.
+To pin a version, set `MAGPIE_VERSION=0.1.3`.
 
 ### macOS: Homebrew
 

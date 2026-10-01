@@ -154,12 +154,17 @@ pub fn net_worth(store: &Store) -> i64 {
 /// End-of-month net worth for the `n` months ending at `last`. One pass.
 pub fn net_worth_series(store: &Store, last: Month, n: usize) -> Vec<(Month, i64)> {
     let months: Vec<Month> = (0..n as i32).rev().map(|k| last.add(-k)).collect();
+    let ends: Vec<Date> = months.iter().map(|m| m.last()).collect();
+    months.into_iter().zip(net_worth_at(store, &ends)).collect()
+}
+
+/// Net worth at the end of each date in `ends` (ascending). One pass.
+pub fn net_worth_at(store: &Store, ends: &[Date]) -> Vec<i64> {
     let mut bal: HashMap<Id, i64> = store.accounts().iter().map(|a| (a.id, a.opening)).collect();
     let txns = store.txns();
     let mut i = 0;
-    let mut out = Vec::with_capacity(n);
-    for m in months {
-        let end = m.last();
+    let mut out = Vec::with_capacity(ends.len());
+    for &end in ends {
         while i < txns.len() && txns[i].date <= end {
             *bal.entry(txns[i].account).or_default() += txns[i].amount;
             i += 1;
@@ -170,7 +175,7 @@ pub fn net_worth_series(store: &Store, last: Month, n: usize) -> Vec<(Month, i64
             .filter(|a| !a.archived)
             .map(|a| store.to_base(bal.get(&a.id).copied().unwrap_or(0), a.currency))
             .sum();
-        out.push((m, total));
+        out.push(total);
     }
     out
 }
@@ -248,7 +253,18 @@ pub type Series = Vec<(Option<Id>, Vec<i64>)>;
 
 pub fn category_trend(store: &Store, last: Month, n: usize, k: usize) -> (Vec<Month>, Series) {
     let months: Vec<Month> = (0..n as i32).rev().map(|i| last.add(-i)).collect();
-    let totals = spending_by_category(store, months[0].first(), last.last());
+    let spans: Vec<(Date, Date)> = months.iter().map(|m| (m.first(), m.last())).collect();
+    (months, category_trend_spans(store, &spans, k))
+}
+
+/// Spend per category for each `(from, to)` span (ascending, inclusive), for
+/// the top `k` categories over the whole range plus everything else as `None`.
+pub fn category_trend_spans(store: &Store, spans: &[(Date, Date)], k: usize) -> Series {
+    let (Some(first), Some(last)) = (spans.first(), spans.last()) else {
+        return Vec::new();
+    };
+    let n = spans.len();
+    let totals = spending_by_category(store, first.0, last.1);
     let top: Vec<Option<Id>> = totals
         .iter()
         .filter(|(c, _)| c.is_some())
@@ -258,20 +274,20 @@ pub fn category_trend(store: &Store, last: Month, n: usize, k: usize) -> (Vec<Mo
     let mut series: Series = top.iter().map(|c| (*c, vec![0; n])).collect();
     series.push((None, vec![0; n]));
     let other = series.len() - 1;
-    for (mi, m) in months.iter().enumerate() {
-        for t in store.txns_in(*m) {
+    for (si_span, (from, to)) in spans.iter().enumerate() {
+        for t in store.txns_between(*from, *to) {
             let e = flow(store, t).1;
             if e == 0 {
                 continue;
             }
             let si = top.iter().position(|c| *c == t.category).unwrap_or(other);
-            series[si].1[mi] += e;
+            series[si].1[si_span] += e;
         }
     }
     if series[other].1.iter().all(|v| *v == 0) {
         series.pop();
     }
-    (months, series)
+    series
 }
 
 /// What the user usually does with a payee: last category and account, and

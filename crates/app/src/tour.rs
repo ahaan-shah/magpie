@@ -13,6 +13,7 @@ enum Extra {
     Palette(&'static str),
     Help,
     Font(&'static str),
+    Range(usize),
 }
 
 pub struct Tour {
@@ -46,6 +47,8 @@ impl Tour {
         steps.push((Page::Reports, "Tokyo Night", Extra::None));
         steps.push((Page::Settings, "Paper", Extra::Font("Plus Jakarta Sans")));
         steps.push((Page::Dashboard, "Latte", Extra::Font("JetBrains Mono")));
+        steps.push((Page::Reports, "Midnight", Extra::Range(0)));
+        steps.push((Page::Reports, "Midnight", Extra::Range(5)));
         Some(Tour {
             dir,
             steps,
@@ -73,6 +76,7 @@ impl Tour {
                 Extra::Palette(_) => app.palette.open = false,
                 Extra::Help => app.modal = None,
                 Extra::Font(_) => app.set_font(ctx, "Inter"),
+                Extra::Range(_) => app.reports.set_range(2),
             }
             let name = format!(
                 "{:02}-{}-{}.png",
@@ -113,6 +117,7 @@ impl Tour {
                 }
                 Extra::Help => app.open_modal(ctx, crate::forms::Modal::Help),
                 Extra::Font(f) => app.set_font(ctx, f),
+                Extra::Range(r) => app.reports.set_range(r),
                 Extra::Palette(q) => {
                     app.palette.toggle(ctx);
                     app.palette.set_query(q);

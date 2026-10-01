@@ -119,7 +119,7 @@ fn main() -> eframe::Result<()> {
         }
     };
 
-    let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon-256.png")).unwrap_or_default();
+    let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon-512.png")).unwrap_or_default();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Magpie")
