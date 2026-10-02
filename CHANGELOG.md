@@ -21,6 +21,8 @@ platforms.
 - In-app updates work on Windows too.
 
 ### Fixed
+- The arrows on "Check for updates" turn at a steady speed instead of
+  rushing, slowing and rushing again, and come to rest smoothly.
 - Restart after an in-app update now reopens Magpie on Linux. It used to
   just close it.
 - In-app updates unpack Windows downloads themselves, so a different `tar`

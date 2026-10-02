@@ -247,6 +247,9 @@ pub fn button(ui: &mut Ui, t: &Theme, kind: Kind, icon: Option<&str>, label: &st
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// How fast the circling arrows turn, in radians per second.
+pub const SPIN_SPEED: f32 = 5.5;
+
 /// Two circling arrows (the "refresh" mark), drawn rather than taken from
 /// the icon font so they can spin smoothly around their true centre.
 pub fn paint_circle_arrows(p: &egui::Painter, center: egui::Pos2, r: f32, angle: f32, color: Color32, width: f32) {
@@ -281,6 +284,41 @@ pub fn paint_circle_arrows(p: &egui::Painter, center: egui::Pos2, r: f32, angle:
     }
 }
 
+/// The arrows' angle at a constant speed from when `spinning` began. When it
+/// stops they finish the half turn they're on (the mark looks the same every
+/// half turn), so they come to rest without a jump. Returns the angle and
+/// whether they're still moving.
+fn spin_angle(ui: &Ui, id: Id, spinning: bool) -> (f32, bool) {
+    use std::f64::consts::PI;
+    let now = ui.input(|i| i.time);
+    // (when the spin started, the angle to stop at once it's been told to)
+    let state: Option<(f64, Option<f64>)> = ui.data(|d| d.get_temp(id));
+    let Some((start, stop)) = state else {
+        if spinning {
+            ui.data_mut(|d| d.insert_temp(id, (now, None::<f64>)));
+        }
+        return (0.0, spinning);
+    };
+    let a = (now - start) * SPIN_SPEED as f64;
+    if spinning {
+        if stop.is_some() {
+            ui.data_mut(|d| d.insert_temp(id, (start, None::<f64>)));
+        }
+        return (a as f32, true);
+    }
+    let end = stop.unwrap_or_else(|| {
+        let end = (a / PI).ceil() * PI;
+        ui.data_mut(|d| d.insert_temp(id, (start, Some(end))));
+        end
+    });
+    if a < end {
+        (a as f32, true)
+    } else {
+        ui.data_mut(|d| d.remove::<(f64, Option<f64>)>(id));
+        (0.0, false)
+    }
+}
+
 /// A secondary button whose icon is the circling arrows; while `spinning`
 /// they turn (and the button ignores clicks).
 pub fn spin_button(ui: &mut Ui, t: &Theme, label: &str, spinning: bool) -> Response {
@@ -303,9 +341,7 @@ pub fn spin_button(ui: &mut Ui, t: &Theme, label: &str, spinning: bool) -> Respo
             ),
             StrokeKind::Inside,
         );
-        let time = ui.input(|i| i.time) as f32;
-        // Ease into the spin rather than snapping to full speed.
-        let angle = if spinning || spin > 0.0 { time * 5.5 * spin } else { 0.0 };
+        let (angle, turning) = spin_angle(ui, resp.id.with("a"), spinning);
         let c = egui::pos2(rect.left() + 14.0 + icon / 2.0, rect.center().y);
         paint_circle_arrows(
             p,
@@ -320,7 +356,7 @@ pub fn spin_button(ui: &mut Ui, t: &Theme, label: &str, spinning: bool) -> Respo
             galley,
             t.text,
         );
-        if spinning || spin > 0.0 {
+        if spinning || spin > 0.0 || turning {
             ui.ctx().request_repaint();
         }
     }
@@ -1096,4 +1132,53 @@ pub fn text_fit(
 ) -> Rect {
     let s = elide(p, text.as_ref(), &font, max_w);
     p.text(pos, align, s, font, color)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Runs `spin_angle` for one frame at `time`.
+    fn frame(ctx: &egui::Context, time: f64, spinning: bool) -> (f32, bool) {
+        let mut out = (0.0, false);
+        let input = egui::RawInput {
+            time: Some(time),
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| out = spin_angle(ui, Id::new("spin"), spinning));
+        // No renderer here to take the font atlas upload.
+        output.textures_delta.clear();
+        out
+    }
+
+    #[test]
+    fn spinner_turns_at_a_steady_speed_and_stops_cleanly() {
+        let ctx = egui::Context::default();
+        // Long after launch, so a speed tied to the clock would show.
+        let t0 = 5000.0;
+        assert_eq!(frame(&ctx, t0, true).0, 0.0);
+        let dt = 1.0 / 60.0;
+        let mut last = 0.0;
+        for i in 1..=60 {
+            let (a, moving) = frame(&ctx, t0 + i as f64 * dt, true);
+            assert!(moving);
+            let step = a - last;
+            assert!((step - SPIN_SPEED * dt as f32).abs() < 1e-3, "frame {i}: step {step}");
+            last = a;
+        }
+        // Stopped: same speed until the half turn completes, then at rest.
+        let mut t = t0 + 60.0 * dt;
+        loop {
+            t += dt;
+            let (a, moving) = frame(&ctx, t, false);
+            if !moving {
+                assert_eq!(a, 0.0);
+                break;
+            }
+            assert!((a - last - SPIN_SPEED * dt as f32).abs() < 1e-3);
+            assert!(a <= 2.0 * std::f32::consts::PI);
+            last = a;
+            assert!(t - t0 < 2.0, "never stopped");
+        }
+    }
 }

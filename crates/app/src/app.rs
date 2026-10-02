@@ -688,7 +688,7 @@ impl App {
         let icon_x = motion::lerp(rect.left() + 14.0, rect.center().x - 8.0, collapse);
         let icon_c = pos2(icon_x + 8.0, rect.center().y);
         if installing {
-            let angle = ui.input(|i| i.time) as f32 * 5.5;
+            let angle = ui.input(|i| i.time) as f32 * widgets::SPIN_SPEED;
             widgets::paint_circle_arrows(p, icon_c, 6.0, angle, motion::with_alpha(t.accent, shown), 1.5);
             ctx.request_repaint();
         } else {
