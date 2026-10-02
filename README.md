@@ -104,15 +104,6 @@ To pin a version, set `MAGPIE_VERSION=0.2.0`.
 
 The app isn't notarized yet. If macOS refuses to open it the first time, right-click the app and choose **Open**, or run `xattr -dr com.apple.quarantine /Applications/Magpie.app`.
 
-To uninstall on macOS, drag **Magpie** from Applications to the Trash. On Linux, run:
-
-```bash
-rm -f ~/.local/bin/magpie ~/.local/share/applications/magpie.desktop \
-  ~/.local/share/icons/hicolor/{scalable,16x16,24x24}/apps/magpie.svg
-```
-
-Your data is kept. To remove it too, delete the data folder listed under [Your data](#your-data).
-
 ### Windows (one line)
 
 In PowerShell:
@@ -125,7 +116,7 @@ This installs Magpie just for you (no admin prompt) into `%LOCALAPPDATA%\Program
 
 You can also download `Magpie-windows-setup.exe` from the [latest release](https://github.com/ahaan-shah/magpie/releases/latest) and run it, or use the portable zip (`Magpie-windows-x64.zip` or `Magpie-windows-arm64.zip`). The installer isn't code-signed yet, so SmartScreen may say "Windows protected your PC". Click **More info**, then **Run anyway**.
 
-To uninstall, use **Settings → Apps**. Your data is kept.
+**Uninstall:** on Linux and macOS, run the install line with `sh -s -- --uninstall` in place of `sh`. On Windows, use **Settings → Apps**. Your data is kept either way.
 
 ## Keyboard
 

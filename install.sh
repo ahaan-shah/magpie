@@ -3,6 +3,10 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/ahaan-shah/magpie/main/install.sh | sh
 #
+# To uninstall (your data is kept):
+#
+#   curl -fsSL https://raw.githubusercontent.com/ahaan-shah/magpie/main/install.sh | sh -s -- --uninstall
+#
 # Environment:
 #   MAGPIE_VERSION      install a specific version (e.g. 0.1.0) instead of the latest
 #   MAGPIE_INSTALL_DIR  where the Linux binary goes (default: ~/.local/bin)
@@ -15,6 +19,53 @@ VERSION="${MAGPIE_VERSION:-latest}"
 say() { printf '\033[1;35mmagpie\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31merror\033[0m %s\n' "$*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || die "this installer needs '$1'"; }
+
+OS="$(uname -s)"
+BIN_DIR="${MAGPIE_INSTALL_DIR:-$HOME/.local/bin}"
+DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
+ICONS="$DATA/icons/hicolor"
+
+# Removes exactly what an install put there. The data folder stays, so
+# reinstalling picks up where you left off.
+uninstall() {
+    case "$OS" in
+    Linux)
+        [ -e "$BIN_DIR/magpie" ] || [ -e "$DATA/applications/magpie.desktop" ] ||
+            die "Magpie isn't installed in $BIN_DIR (set MAGPIE_INSTALL_DIR if you chose another folder)"
+        rm -f "$BIN_DIR/magpie" "$DATA/applications/magpie.desktop" \
+            "$ICONS"/*/apps/magpie.svg "$ICONS"/*/apps/magpie.png
+        # Left only if an in-app update was interrupted.
+        rm -rf "$BIN_DIR"/.magpie-update-* "$BIN_DIR/.magpie.old"
+        command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q "$DATA/applications" || true
+        command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -t "$ICONS" 2>/dev/null || true
+        say "uninstalled $BIN_DIR/magpie"
+        say "your data is still in $DATA/magpie (delete it to remove that too)"
+        ;;
+    Darwin)
+        found=""
+        for app in /Applications/Magpie.app "$HOME/Applications/Magpie.app"; do
+            [ -e "$app" ] || continue
+            found=1
+            rm -rf "$app" 2>/dev/null || die "couldn't remove $app (try: sudo rm -rf '$app')"
+            say "uninstalled $app"
+        done
+        [ -n "$found" ] || die "Magpie.app isn't in /Applications or ~/Applications"
+        say "your data is still in ~/Library/Application Support/dev.magpie.magpie (delete it to remove that too)"
+        ;;
+    *)
+        die "unsupported OS: $OS (Magpie supports Linux and macOS)"
+        ;;
+    esac
+}
+
+case "${1:-}" in
+"") ;;
+--uninstall)
+    uninstall
+    exit 0
+    ;;
+*) die "unknown option: $1 (the only option is --uninstall)" ;;
+esac
 
 need curl
 need uname
@@ -49,7 +100,6 @@ verify() {
     fi
 }
 
-OS="$(uname -s)"
 ARCH="$(uname -m)"
 
 case "$OS" in
@@ -66,9 +116,6 @@ Linux)
     tar -xzf "$TMP/$ASSET" -C "$TMP"
     SRC="$TMP/magpie-$ARCH-unknown-linux-gnu"
 
-    BIN_DIR="${MAGPIE_INSTALL_DIR:-$HOME/.local/bin}"
-    DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
-    ICONS="$DATA/icons/hicolor"
     mkdir -p "$BIN_DIR" "$DATA/applications"
     install -m 755 "$SRC/magpie" "$BIN_DIR/magpie"
     if [ -f "$SRC/magpie.svg" ]; then

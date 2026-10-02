@@ -4,6 +4,12 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `install.sh --uninstall` (`curl … | sh -s -- --uninstall`) removes Magpie
+  on Linux and macOS and keeps your data.
+
 ## [0.2.0] - 2026-10-02
 
 Magpie now runs on Windows. Everything in 0.1.6 is here, on all three
