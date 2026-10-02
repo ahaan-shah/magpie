@@ -57,7 +57,7 @@ Linux)
     case "$ARCH" in
     x86_64 | amd64) ARCH=x86_64 ;;
     aarch64 | arm64) ARCH=aarch64 ;;
-    *) die "unsupported architecture: $ARCH (try: cargo install magpie-finance)" ;;
+    *) die "unsupported architecture: $ARCH (you can build from source: https://github.com/$REPO#building-from-source)" ;;
     esac
     need tar
     ASSET="magpie-$ARCH-unknown-linux-gnu.tar.gz"

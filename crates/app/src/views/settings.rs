@@ -111,7 +111,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                         if f.name == current {
                             text = text.color(t.accent);
                         }
-                        let resp = ui.selectable_label(f.name == current, text);
+                        let resp = w::option(ui, f.name == current, text);
                         let resp = if f.mono {
                             resp.on_hover_text("Monospaced — every character the same width")
                         } else {

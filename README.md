@@ -100,29 +100,9 @@ What the script does on each platform:
 - **Linux:** installs `magpie` into `~/.local/bin`, and adds a desktop entry and icon so Magpie shows up in your app launcher.
 - **macOS:** installs `Magpie.app` (universal, Apple Silicon + Intel) into `/Applications`.
 
-To pin a version, set `MAGPIE_VERSION=0.1.3`.
+To pin a version, set `MAGPIE_VERSION=0.1.4`.
 
-### macOS: Homebrew
-
-```bash
-brew install --cask ahaan-shah/tap/magpie-finance
-```
-
-You can also download `Magpie-macos-universal.dmg` from the [latest release](https://github.com/ahaan-shah/magpie/releases/latest). The app isn't notarized yet. If macOS refuses to open it the first time, right-click the app and choose **Open**, or run `xattr -dr com.apple.quarantine /Applications/Magpie.app`.
-
-### Arch Linux (AUR)
-
-```bash
-yay -S magpie-finance
-```
-
-### Cargo
-
-```bash
-cargo install magpie-finance
-```
-
-This installs a `magpie` binary. On Debian/Ubuntu you'll need `libxkbcommon-dev libwayland-dev libgl1-mesa-dev` first.
+The app isn't notarized yet. If macOS refuses to open it the first time, right-click the app and choose **Open**, or run `xattr -dr com.apple.quarantine /Applications/Magpie.app`.
 
 ## Keyboard
 

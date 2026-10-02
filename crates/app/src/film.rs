@@ -748,3 +748,90 @@ fn film() {
     assert!(ffmpeg.wait().expect("ffmpeg").success(), "ffmpeg failed");
     eprintln!("film: wrote {out_path} in {:.0?}", clock.elapsed());
 }
+
+/// `MAGPIE_STILL_DIR=<dir> cargo test -p magpie-finance --release stills -- --ignored`
+/// renders a few UI states (an open category dropdown in a light and a dark
+/// theme) to PNGs, for checking visual details without a display.
+#[test]
+#[ignore = "renders PNGs for visual review; run explicitly"]
+fn stills() {
+    // SAFETY: single-threaded test setup before the app reads these.
+    unsafe {
+        std::env::set_var("MAGPIE_HEADLESS", "1");
+        std::env::set_var("MAGPIE_TODAY", "2026-09-29");
+    }
+    crate::marks::enable();
+    let out = std::env::var("MAGPIE_STILL_DIR")
+        .unwrap_or_else(|_| std::env::temp_dir().join("magpie-stills").display().to_string());
+    std::fs::create_dir_all(&out).expect("out dir");
+    for theme in ["Paper", "Midnight"] {
+        let dir = std::env::temp_dir().join(format!("magpie-stills-{theme}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut store = magpie_core::Store::open(&dir).expect("store");
+        magpie_core::demo::generate(&mut store, magpie_core::Cur::USD, 3, 0).expect("demo");
+        store.update_settings(|s| s.theme = theme.into()).expect("theme");
+        let ctx = Context::default();
+        let mut app = App::with_context(&ctx, None, store);
+        let mut renderer = WgpuTestRenderer::new();
+        let ppp = 2.0;
+        let mut t = 0.0f64;
+        let mut step = |app: &mut App, events: Vec<Event>, t: f64| {
+            let mut raw = RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
+                time: Some(t),
+                events,
+                ..Default::default()
+            };
+            raw.viewports.insert(
+                ViewportId::ROOT,
+                ViewportInfo {
+                    native_pixels_per_point: Some(ppp),
+                    ..Default::default()
+                },
+            );
+            let mut output = ctx.run_ui(raw, |ui| app.frame(ui));
+            renderer.handle_delta(&mut output.textures_delta);
+            (renderer.render(&ctx, &output).expect("render"), output)
+        };
+        let click = |pos: Pos2| {
+            vec![
+                Event::PointerMoved(pos),
+                Event::PointerButton {
+                    pos,
+                    button: PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Modifiers::NONE,
+                },
+                Event::PointerButton {
+                    pos,
+                    button: PointerButton::Primary,
+                    pressed: false,
+                    modifiers: Modifiers::NONE,
+                },
+            ]
+        };
+        let form = crate::forms::TxnForm::new(&app.store, app.today);
+        app.open_modal(&ctx, crate::forms::Modal::Txn(form));
+        for _ in 0..90 {
+            t += 1.0 / 60.0;
+            step(&mut app, Vec::new(), t);
+        }
+        let picker = crate::marks::get("picker:\"txn-cat\"").expect("category picker on screen");
+        step(&mut app, click(picker.center()), t + 0.02);
+        for _ in 0..40 {
+            t += 1.0 / 60.0;
+            step(&mut app, Vec::new(), t);
+        }
+        // Hover the row two below the selection to show both states.
+        let hover = picker.center() + vec2(-40.0, picker.height() * 4.2);
+        let mut last = None;
+        for _ in 0..30 {
+            t += 1.0 / 60.0;
+            last = Some(step(&mut app, vec![Event::PointerMoved(hover)], t).0);
+        }
+        let img = last.expect("frame");
+        let path = format!("{out}/dropdown-{}.png", theme.to_lowercase());
+        img.save(&path).expect("save");
+        eprintln!("stills: wrote {path}");
+    }
+}

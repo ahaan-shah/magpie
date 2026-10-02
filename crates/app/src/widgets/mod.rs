@@ -499,7 +499,70 @@ pub fn dropdown<R>(
         .selected_text(selected)
         .width(width)
         .height(320.0)
-        .show_ui(ui, add)
+        .show_ui(ui, |ui| {
+            ui.spacing_mut().item_spacing.y = 2.0;
+            add(ui)
+        })
+}
+
+/// Space kept clear on the right of menu rows so the floating scrollbar never
+/// overlaps a highlight.
+const MENU_GUTTER: f32 = 12.0;
+
+/// A row in a dropdown or menu: a soft hover, and for the current choice a
+/// faint accent wash with a check mark. Colors come from the active visuals,
+/// so it works in any theme without passing one in. Drop-in for
+/// `Ui::selectable_label`.
+pub fn option(ui: &mut Ui, selected: bool, text: impl Into<egui::WidgetText>) -> egui::Response {
+    let v = ui.visuals().clone();
+    let accent = v.selection.stroke.color;
+    let pad = 10.0;
+    let check_w = 22.0;
+    let width = (ui.available_width() - MENU_GUTTER).max(60.0);
+    let galley = text.into().into_galley(
+        ui,
+        Some(egui::TextWrapMode::Truncate),
+        width - pad * 2.0 - check_w,
+        egui::TextStyle::Button,
+    );
+    let height = (galley.size().y + 14.0).max(32.0);
+    let (rect, resp) = ui.allocate_exact_size(vec2(width, height), Sense::click());
+    if ui.is_rect_visible(rect) {
+        let hover = motion::toggle(ui.ctx(), resp.id.with("hover"), resp.hovered(), motion::MICRO);
+        let p = ui.painter();
+        let radius = CornerRadius::same(8);
+        if selected {
+            let fill = motion::with_alpha(accent, if v.dark_mode { 0.16 } else { 0.11 } + 0.05 * hover);
+            p.rect_filled(rect, radius, fill);
+            p.text(
+                egui::pos2(rect.right() - pad - 4.0, rect.center().y),
+                Align2::RIGHT_CENTER,
+                ph::CHECK,
+                theme::semibold(13.0),
+                accent,
+            );
+        } else if hover > 0.0 {
+            p.rect_filled(rect, radius, motion::with_alpha(v.widgets.inactive.bg_fill, hover));
+        }
+        let pos = egui::pos2(rect.left() + pad, rect.center().y - galley.size().y / 2.0);
+        p.galley(pos, galley, v.text_color());
+    }
+    resp
+}
+
+/// Drop-in for `Ui::selectable_value`, drawn with [`option`].
+pub fn option_value<V: PartialEq>(
+    ui: &mut Ui,
+    current: &mut V,
+    value: V,
+    text: impl Into<egui::WidgetText>,
+) -> egui::Response {
+    let mut resp = option(ui, *current == value, text);
+    if resp.clicked() && *current != value {
+        *current = value;
+        resp.mark_changed();
+    }
+    resp
 }
 
 // ------------------------------------------------------------ date picker

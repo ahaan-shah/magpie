@@ -4,6 +4,14 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.4] - 2026-10-02
+
+### Changed
+- Dropdowns and menus: the current choice gets a soft tint and a check mark
+  instead of a heavy accent block, rows have a gentle hover, and the list
+  keeps a lane clear for the scrollbar so it never overlaps a highlight.
+- README: install instructions are just the one-line script for now.
+
 ## [0.1.3] - 2026-10-01
 
 ### Added

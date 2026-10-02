@@ -146,12 +146,12 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 .filter(|c| c.kind == CategoryKind::Expense && !c.archived && store.budget_plan(c.id).is_none())
                 .collect();
             w::dropdown(ui, "budget-add", format!("{}  Add budget", ph::PLUS), 180.0, |ui| {
-                if ui
-                    .selectable_label(
-                        false,
-                        egui::RichText::new(format!("{}  New category…", ph::PLUS)).color(t.accent),
-                    )
-                    .clicked()
+                if w::option(
+                    ui,
+                    false,
+                    egui::RichText::new(format!("{}  New category…", ph::PLUS)).color(t.accent),
+                )
+                .clicked()
                 {
                     acts.push(Act::NewCategory);
                 }
@@ -159,10 +159,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     ui.separator();
                 }
                 for c in unplanned {
-                    if ui
-                        .selectable_label(false, format!("{}  {}", icons::glyph(&c.icon), c.name))
-                        .clicked()
-                    {
+                    if w::option(ui, false, format!("{}  {}", icons::glyph(&c.icon), c.name)).clicked() {
                         let avg = d.averages.iter().find(|x| x.0 == c.id).map(|x| x.1).unwrap_or(0);
                         acts.push(Act::Add(c.id, avg.max(base.from_major(100.0))));
                     }

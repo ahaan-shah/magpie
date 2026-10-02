@@ -182,7 +182,7 @@ pub fn account_picker(
     w::dropdown(ui, id, label, width, |ui| {
         for a in store.active_accounts() {
             let text = format!("{}  {}  ·  {}", icons::account_kind(a.kind), a.name, a.currency);
-            ui.selectable_value(sel, a.id, text);
+            w::option_value(ui, sel, a.id, text);
         }
     });
 }
@@ -202,28 +202,35 @@ pub fn category_picker(
             .into(),
         None => egui::RichText::new("Uncategorized").color(t.text2).into(),
     };
-    w::dropdown(ui, id, label, width, |ui| {
-        ui.selectable_value(sel, None, egui::RichText::new("Uncategorized").color(t.text2));
+    let key = format!("picker:{id:?}");
+    let resp = w::dropdown(ui, id, label, width, |ui| {
+        w::option_value(ui, sel, None, egui::RichText::new("Uncategorized").color(t.text2));
         for k in [CategoryKind::Expense, CategoryKind::Income] {
             if kind.is_some_and(|x| x != k) {
                 continue;
             }
-            ui.add_space(4.0);
-            ui.label(w::faint(
-                t,
-                if k == CategoryKind::Expense {
-                    "EXPENSES"
-                } else {
-                    "INCOME"
-                },
-            ));
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.add_space(10.0);
+                ui.label(
+                    egui::RichText::new(if k == CategoryKind::Expense {
+                        "EXPENSES"
+                    } else {
+                        "INCOME"
+                    })
+                    .font(theme::semibold(10.5))
+                    .color(t.text3),
+                );
+            });
+            ui.add_space(2.0);
             for c in store.categories().iter().filter(|c| c.kind == k && !c.archived) {
                 let text = egui::RichText::new(format!("{}  {}", icons::glyph(&c.icon), c.name))
                     .color(w::readable(t, w::cat_color(c.color)));
-                ui.selectable_value(sel, Some(c.id), text);
+                w::option_value(ui, sel, Some(c.id), text);
             }
         }
     });
+    crate::marks::record(|| key, resp.response.rect);
 }
 
 fn amount_field(ui: &mut Ui, t: &Theme, id: Id, value: &mut String, cur: Cur, color: Color32) -> egui::Response {
@@ -704,7 +711,12 @@ impl AccountForm {
                     wd,
                     |ui| {
                         for k in AccountKind::ALL {
-                            ui.selectable_value(&mut acc.kind, k, format!("{}  {}", icons::account_kind(k), k.label()));
+                            w::option_value(
+                                ui,
+                                &mut acc.kind,
+                                k,
+                                format!("{}  {}", icons::account_kind(k), k.label()),
+                            );
                         }
                     },
                 );
@@ -796,7 +808,12 @@ pub fn currency_picker(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, 
     w::dropdown(ui, id, label, width, |ui| {
         for info in money::CURRENCIES {
             if let Some(c) = Cur::new(info.code) {
-                ui.selectable_value(cur, c, format!("{}  {}  {}", info.code, info.symbol.trim(), info.name));
+                w::option_value(
+                    ui,
+                    cur,
+                    c,
+                    format!("{}  {}  {}", info.code, info.symbol.trim(), info.name),
+                );
             }
         }
     });
@@ -977,7 +994,7 @@ impl RuleForm {
             let iv = self.rule.interval;
             w::dropdown(ui, "rule-freq", fr.unit(iv), 120.0, |ui| {
                 for f in Freq::ALL {
-                    ui.selectable_value(fr, f, f.unit(iv));
+                    w::option_value(ui, fr, f, f.unit(iv));
                 }
             });
             ui.label(w::subtle(t, "starting"));
@@ -1484,9 +1501,9 @@ impl ImportForm {
     fn col_picker(ui: &mut Ui, id: &str, headers: &[String], sel: &mut Option<usize>, width: f32) {
         let label = sel.and_then(|i| headers.get(i)).cloned().unwrap_or_else(|| "—".into());
         w::dropdown(ui, id, label, width, |ui| {
-            ui.selectable_value(sel, None, "—");
+            w::option_value(ui, sel, None, "—");
             for (i, h) in headers.iter().enumerate() {
-                ui.selectable_value(sel, Some(i), h);
+                w::option_value(ui, sel, Some(i), h);
             }
         });
     }
@@ -1556,7 +1573,7 @@ impl ImportForm {
             let df = &mut self.map.date_format;
             w::dropdown(ui, "imp-df", df.label(), 150.0, |ui| {
                 for f in DateFormat::ALL {
-                    ui.selectable_value(df, f, f.label());
+                    w::option_value(ui, df, f, f.label());
                 }
             });
             ui.add_space(12.0);

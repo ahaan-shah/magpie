@@ -654,13 +654,13 @@ fn filter_dropdowns(ui: &mut Ui, store: &Store, st: &mut State, today: Date) {
             Range::ThisYear,
             Range::All,
         ] {
-            ui.selectable_value(&mut st.range, r, r.label());
+            w::option_value(ui, &mut st.range, r, r.label());
         }
         ui.separator();
         let now = Month::of(app_today);
         for k in 0..12 {
             let m = now.add(-k);
-            ui.selectable_value(&mut st.range, Range::Month(m), m.label());
+            w::option_value(ui, &mut st.range, Range::Month(m), m.label());
         }
     });
 
@@ -670,9 +670,10 @@ fn filter_dropdowns(ui: &mut Ui, store: &Store, st: &mut State, today: Date) {
         .map(|a| a.name.clone())
         .unwrap_or_else(|| "All accounts".into());
     w::dropdown(ui, "ledger-acc", format!("{}  {acc_label}", ph::WALLET), 160.0, |ui| {
-        ui.selectable_value(&mut st.account, None, "All accounts");
+        w::option_value(ui, &mut st.account, None, "All accounts");
         for a in store.accounts() {
-            ui.selectable_value(
+            w::option_value(
+                ui,
                 &mut st.account,
                 Some(a.id),
                 format!("{}  {}", icons::account_kind(a.kind), a.name),
@@ -686,10 +687,11 @@ fn filter_dropdowns(ui: &mut Ui, store: &Store, st: &mut State, today: Date) {
         CatFilter::Is(c) => store.category_name(Some(c)).to_string(),
     };
     w::dropdown(ui, "ledger-cat", format!("{}  {cat_label}", ph::TAG), 160.0, |ui| {
-        ui.selectable_value(&mut st.cat, CatFilter::Any, "All categories");
-        ui.selectable_value(&mut st.cat, CatFilter::Uncategorized, "Uncategorized");
+        w::option_value(ui, &mut st.cat, CatFilter::Any, "All categories");
+        w::option_value(ui, &mut st.cat, CatFilter::Uncategorized, "Uncategorized");
         for c in store.categories() {
-            ui.selectable_value(
+            w::option_value(
+                ui,
                 &mut st.cat,
                 CatFilter::Is(c.id),
                 format!("{}  {}", icons::glyph(&c.icon), c.name),
@@ -1300,14 +1302,11 @@ fn bulk_bar(app: &mut App, ctx: &egui::Context, t: &Theme, area: Rect, acts: &mu
                         let mut pick: Option<RowId> = None;
                         let mut chosen = false;
                         w::dropdown(ui, "bulk-cat", format!("{}  Categorize", ph::TAG), 150.0, |ui| {
-                            if ui.selectable_label(false, "Uncategorized").clicked() {
+                            if w::option(ui, false, "Uncategorized").clicked() {
                                 chosen = true;
                             }
                             for c in app.store.categories().iter().filter(|c| !c.archived) {
-                                if ui
-                                    .selectable_label(false, format!("{}  {}", icons::glyph(&c.icon), c.name))
-                                    .clicked()
-                                {
+                                if w::option(ui, false, format!("{}  {}", icons::glyph(&c.icon), c.name)).clicked() {
                                     pick = Some(c.id);
                                     chosen = true;
                                 }
