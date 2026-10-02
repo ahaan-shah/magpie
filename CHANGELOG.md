@@ -4,6 +4,23 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.6] - 2026-10-02
+
+### Added
+- Updates: Magpie checks for a new release on launch (Settings → About →
+  "Automatically check for updates", on by default) and with "Check for
+  updates". When one is out, an "Update available" prompt appears in the
+  sidebar and in Settings. Nothing downloads until you click Update: Magpie
+  then fetches the build for your system, verifies its checksum, installs
+  it in place (your data is untouched) and offers a Restart. Copies
+  installed by a package manager point you to the download instead.
+- `magpie --licenses` prints the licenses of the bundled fonts, icons and
+  libraries, which now also ship as THIRD-PARTY-LICENSES.txt in every
+  download.
+
+### Changed
+- Settings → About is just "Local-first personal finance. MIT licensed."
+
 ## [0.1.5] - 2026-10-02
 
 ### Added

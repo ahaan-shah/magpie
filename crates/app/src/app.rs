@@ -105,6 +105,7 @@ pub struct App {
     pub onboarding: Option<views::onboarding::State>,
     pub receipts: ReceiptCache,
     pub dialogs: crate::dialogs::Dialogs,
+    pub updater: crate::updater::Updater,
     pub collapsed: bool,
     fx_rx: Option<mpsc::Receiver<FxResult>>,
     pub fx_busy: bool,
@@ -178,6 +179,7 @@ impl App {
             onboarding,
             receipts: ReceiptCache::default(),
             dialogs: crate::dialogs::Dialogs::default(),
+            updater: crate::updater::Updater::default(),
             collapsed: persisted.map(|p| p.collapsed).unwrap_or(false),
             fx_rx: None,
             fx_busy: false,
@@ -634,8 +636,103 @@ impl App {
                         ui.add_space(8.0);
                         self.net_worth_card(ui, &t, 1.0 - k / 0.3);
                     }
+                    if self.updater.prompt() {
+                        ui.add_space(8.0);
+                        self.update_prompt(ui, &t, k > 0.5);
+                    }
                 });
             });
+    }
+
+    /// The sidebar's update / restart prompt. Nothing here happens without a
+    /// click: the launch check only makes it appear.
+    fn update_prompt(&mut self, ui: &mut Ui, t: &Theme, compact: bool) {
+        use crate::updater::Phase;
+        let ctx = ui.ctx().clone();
+        let phase = self.updater.phase.clone();
+        let appear = motion::appear(&ctx, 0.0, 0.0, 0.3);
+        if compact {
+            let (glyph, tip) = match &phase {
+                Phase::Available(r) => (ph::ARROW_CIRCLE_UP, format!("Update to Magpie {}", r.version)),
+                Phase::Manual(r, _) => (ph::ARROW_CIRCLE_UP, format!("Magpie {} is available", r.version)),
+                Phase::Installing(_) => (ph::CIRCLE_NOTCH, "Updating…".to_string()),
+                _ => (ph::ARROWS_CLOCKWISE, "Restart to finish updating".to_string()),
+            };
+            let full = ui.max_rect();
+            let (strip, _) = ui.allocate_exact_size(vec2(full.width(), 34.0), Sense::hover());
+            let r = Rect::from_center_size(strip.center(), vec2(34.0, 34.0));
+            ui.painter()
+                .rect_filled(r, CornerRadius::same(10), motion::with_alpha(t.accent, 0.16 * appear));
+            let resp = ui
+                .scope_builder(egui::UiBuilder::new().max_rect(r), |ui| {
+                    widgets::icon_button(ui, t, glyph, &tip)
+                })
+                .inner;
+            if resp.clicked() {
+                self.update_action(&ctx);
+            }
+            return;
+        }
+        egui::Frame::new()
+            .fill(t.tint(t.accent, 0.10))
+            .stroke(Stroke::new(1.0, motion::with_alpha(t.accent, 0.35)))
+            .corner_radius(CornerRadius::same(12))
+            .inner_margin(egui::Margin::same(12))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                let (title, sub) = match &phase {
+                    Phase::Available(r) | Phase::Manual(r, _) => ("Update available", format!("Magpie {}", r.version)),
+                    Phase::Installing(r) => ("Updating…", format!("Magpie {}", r.version)),
+                    Phase::Ready(r) => ("Update installed", format!("Restart to use {}", r.version)),
+                    _ => return,
+                };
+                ui.label(egui::RichText::new(title).font(theme::semibold(13.0)).color(t.text));
+                ui.label(egui::RichText::new(sub).font(theme::regular(11.5)).color(t.text2));
+                ui.add_space(6.0);
+                match &phase {
+                    Phase::Installing(_) => {
+                        let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 6.0), Sense::hover());
+                        widgets::paint_progress(
+                            ui,
+                            t,
+                            Id::new("update-progress"),
+                            r,
+                            self.updater.progress,
+                            None,
+                            t.accent,
+                        );
+                    }
+                    Phase::Manual(r, why) => {
+                        if widgets::secondary(ui, t, Some(ph::DOWNLOAD_SIMPLE), "Download")
+                            .on_hover_text(why)
+                            .clicked()
+                        {
+                            open_url(&r.page);
+                        }
+                    }
+                    Phase::Ready(_) => {
+                        if widgets::primary(ui, t, Some(ph::ARROWS_CLOCKWISE), "Restart").clicked() {
+                            self.update_action(&ctx);
+                        }
+                    }
+                    _ => {
+                        if widgets::primary(ui, t, Some(ph::ARROW_CIRCLE_UP), "Update").clicked() {
+                            self.update_action(&ctx);
+                        }
+                    }
+                }
+            });
+    }
+
+    /// What clicking the update prompt does in its current state.
+    pub fn update_action(&mut self, ctx: &egui::Context) {
+        use crate::updater::Phase;
+        match &self.updater.phase {
+            Phase::Available(_) => self.updater.install(ctx),
+            Phase::Manual(r, _) => open_url(&r.page.clone()),
+            Phase::Ready(_) => self.updater.restart(ctx),
+            _ => {}
+        }
     }
 
     fn net_worth_card(&mut self, ui: &mut Ui, t: &Theme, alpha: f32) {
@@ -868,6 +965,10 @@ impl eframe::App for App {
         }
     }
 
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.updater.on_exit();
+    }
+
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(
             storage,
@@ -904,6 +1005,15 @@ impl App {
         // Wake up for the date rollover even when idle.
         ctx.request_repaint_after(std::time::Duration::from_secs(60));
         self.poll_jobs(&ctx);
+        match self.updater.poll(&ctx) {
+            Some(Ok(msg)) => self.toasts.success(msg),
+            Some(Err(msg)) => self.toasts.error(msg),
+            None => {}
+        }
+        if self.onboarding.is_none() && self.tour.is_none() {
+            let auto = self.store.settings().auto_update;
+            self.updater.launch_check(&ctx, auto);
+        }
 
         if self.onboarding.is_some() {
             views::onboarding::show(self, ui);
@@ -1070,6 +1180,22 @@ pub fn open_external(path: &std::path::Path) {
     let cmd = "xdg-open";
     if let Err(e) = std::process::Command::new(cmd).arg(path).spawn() {
         crate::diag::crumb(format!("couldn't run {cmd}: {e}"));
+    }
+}
+
+/// Opens a web page in the default browser.
+pub fn open_url(url: &str) {
+    if headless() || url.is_empty() {
+        return;
+    }
+    #[cfg(target_os = "macos")]
+    let r = std::process::Command::new("open").arg(url).spawn();
+    #[cfg(windows)]
+    let r = std::process::Command::new("explorer").arg(url).spawn();
+    #[cfg(not(any(target_os = "macos", windows)))]
+    let r = std::process::Command::new("xdg-open").arg(url).spawn();
+    if let Err(e) = r {
+        crate::diag::crumb(format!("couldn't open {url}: {e}"));
     }
 }
 

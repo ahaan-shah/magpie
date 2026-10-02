@@ -26,6 +26,7 @@ for s in 16 32 128 256 512; do
     sips -z $((s * 2)) $((s * 2)) packaging/linux/icon-1024.png --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null
 done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/magpie.icns"
+cp THIRD-PARTY-LICENSES.txt LICENSE "$APP/Contents/Resources/"
 rm -rf "$ICONSET"
 
 # Ad-hoc signature so Apple Silicon will run it.

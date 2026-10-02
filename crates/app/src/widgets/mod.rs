@@ -247,6 +247,90 @@ pub fn button(ui: &mut Ui, t: &Theme, kind: Kind, icon: Option<&str>, label: &st
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// Two circling arrows (the "refresh" mark), drawn rather than taken from
+/// the icon font so they can spin smoothly around their true centre.
+pub fn paint_circle_arrows(p: &egui::Painter, center: egui::Pos2, r: f32, angle: f32, color: Color32, width: f32) {
+    use std::f32::consts::PI;
+    for half in 0..2 {
+        let start = angle + half as f32 * PI + 0.35;
+        let sweep = PI - 0.85;
+        let n = 18;
+        let pts: Vec<egui::Pos2> = (0..=n)
+            .map(|i| {
+                let a = start + sweep * i as f32 / n as f32;
+                center + vec2(a.cos(), a.sin()) * r
+            })
+            .collect();
+        p.add(egui::Shape::line(pts, Stroke::new(width, color)));
+        // Arrowhead at the leading end, pointing along the direction of travel.
+        let a = start + sweep;
+        let tip = center + vec2(a.cos(), a.sin()) * r;
+        let along = vec2(-a.sin(), a.cos());
+        let out = vec2(a.cos(), a.sin());
+        let head = r * 0.55;
+        let back = tip - along * head;
+        p.add(egui::Shape::convex_polygon(
+            vec![
+                tip + along * width * 0.6,
+                back + out * head * 0.55,
+                back - out * head * 0.55,
+            ],
+            color,
+            Stroke::NONE,
+        ));
+    }
+}
+
+/// A secondary button whose icon is the circling arrows; while `spinning`
+/// they turn (and the button ignores clicks).
+pub fn spin_button(ui: &mut Ui, t: &Theme, label: &str, spinning: bool) -> Response {
+    let font = theme::medium(13.5);
+    let galley = ui.painter().layout_no_wrap(label.to_string(), font, t.text);
+    let icon = 16.0;
+    let size = vec2(14.0 + icon + 8.0 + galley.size().x + 14.0, 34.0);
+    let (rect, resp) = ui.allocate_exact_size(size, if spinning { Sense::hover() } else { Sense::click() });
+    let hover = motion::toggle(ui.ctx(), resp.id.with("h"), resp.hovered() && !spinning, motion::MICRO);
+    let spin = motion::toggle(ui.ctx(), resp.id.with("s"), spinning, motion::STANDARD);
+    if ui.is_rect_visible(rect) {
+        let p = ui.painter();
+        p.rect(
+            rect,
+            CornerRadius::same(theme::RADIUS_SM),
+            motion::lerp_color(t.hover, t.tint(t.accent, 0.14), hover.max(spin * 0.6)),
+            Stroke::new(
+                1.0,
+                motion::lerp_color(t.border, motion::with_alpha(t.accent, 0.6), hover.max(spin)),
+            ),
+            StrokeKind::Inside,
+        );
+        let time = ui.input(|i| i.time) as f32;
+        // Ease into the spin rather than snapping to full speed.
+        let angle = if spinning || spin > 0.0 { time * 5.5 * spin } else { 0.0 };
+        let c = egui::pos2(rect.left() + 14.0 + icon / 2.0, rect.center().y);
+        paint_circle_arrows(
+            p,
+            c,
+            icon * 0.38,
+            angle,
+            motion::lerp_color(t.text2, t.accent, spin),
+            1.7,
+        );
+        p.galley(
+            egui::pos2(rect.left() + 14.0 + icon + 8.0, rect.center().y - galley.size().y / 2.0),
+            galley,
+            t.text,
+        );
+        if spinning || spin > 0.0 {
+            ui.ctx().request_repaint();
+        }
+    }
+    if spinning {
+        resp
+    } else {
+        resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+    }
+}
+
 pub fn primary(ui: &mut Ui, t: &Theme, icon: Option<&str>, label: &str) -> Response {
     button(ui, t, Kind::Primary, icon, label)
 }

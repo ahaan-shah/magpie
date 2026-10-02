@@ -59,6 +59,8 @@ jobs:
             dist/Magpie-macos-universal.zip
 
   windows:
+    # Windows ships from 0.2.0; 0.1.x releases are Linux and macOS only.
+    if: ${{ !startsWith(github.ref_name, 'v0.1.') }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -94,7 +96,10 @@ jobs:
 
   publish:
     needs: [linux, macos, windows]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      ${{ always() && startsWith(github.ref, 'refs/tags/v')
+      && needs.linux.result == 'success' && needs.macos.result == 'success'
+      && (needs.windows.result == 'success' || needs.windows.result == 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -108,12 +113,14 @@ jobs:
           name: macos
           path: artifacts
       - uses: actions/download-artifact@v4
+        if: needs.windows.result == 'success'
         with:
           name: windows
           path: artifacts
       - name: Checksums
         run: |
-          cp install.sh install.ps1 artifacts/
+          cp install.sh artifacts/
+          if ls artifacts/Magpie-windows-* >/dev/null 2>&1; then cp install.ps1 artifacts/; fi
           cd artifacts && sha256sum * > SHA256SUMS && cat SHA256SUMS
       - name: Release notes from CHANGELOG
         run: |

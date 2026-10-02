@@ -27,6 +27,7 @@ mod receipts_cache;
 mod theme;
 mod toasts;
 mod tour;
+mod updater;
 mod views;
 mod widgets;
 
@@ -64,6 +65,7 @@ OPTIONS:
     --data-dir <PATH>   Use a different data folder
     --demo [N]          Open a throwaway demo workspace (N extra transactions
                         for load testing), leaving your real data untouched
+    --licenses          Print the licenses of bundled fonts and libraries
     -V, --version       Print version
     -h, --help          Print this help
 ";
@@ -82,6 +84,10 @@ fn main() -> eframe::Result<()> {
         match a.as_str() {
             "-h" | "--help" => {
                 print!("{HELP}");
+                return Ok(());
+            }
+            "--licenses" => {
+                print!("{}", include_str!("../../../THIRD-PARTY-LICENSES.txt"));
                 return Ok(());
             }
             "-V" | "--version" => {

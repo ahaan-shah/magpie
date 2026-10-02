@@ -34,6 +34,9 @@ enum Act {
     Backup,
     OpenFolder,
     Demo,
+    CheckUpdates,
+    UpdateAction,
+    AutoUpdate(bool),
 }
 
 pub fn export_all(app: &mut App, f: Format) {
@@ -66,6 +69,9 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let current_theme = app.theme.target_name();
 
     let zoom = ui.ctx().zoom_factor();
+    let update_phase = app.updater.phase.clone();
+    let update_progress = app.updater.progress;
+    let mut auto_update = app.store.settings().auto_update;
     let s_font = app.store.settings().font.clone();
     // ← / → cycle themes on this page.
     if app.keys.left || app.keys.right {
@@ -437,12 +443,94 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     });
 
     section(ui, &t, "About", "", |ui| {
+        use crate::updater::Phase;
+        ui.horizontal(|ui| match &update_phase {
+            Phase::Available(r) => {
+                if w::primary(ui, &t, Some(ph::ARROW_CIRCLE_UP), &format!("Update to {}", r.version)).clicked() {
+                    acts.push(Act::UpdateAction);
+                }
+                ui.label(
+                    egui::RichText::new("Update available")
+                        .font(theme::medium(13.0))
+                        .color(t.accent),
+                );
+            }
+            Phase::Manual(r, why) => {
+                if w::secondary(ui, &t, Some(ph::DOWNLOAD_SIMPLE), &format!("Download {}", r.version)).clicked() {
+                    acts.push(Act::UpdateAction);
+                }
+                ui.label(
+                    egui::RichText::new("Update available")
+                        .font(theme::medium(13.0))
+                        .color(t.accent),
+                );
+                ui.label(w::faint(&t, why));
+            }
+            Phase::Installing(r) => {
+                ui.label(
+                    egui::RichText::new(format!("Updating to {}…", r.version))
+                        .font(theme::medium(13.0))
+                        .color(t.text),
+                );
+                let (bar, _) = ui.allocate_exact_size(vec2(160.0, 6.0), Sense::hover());
+                w::paint_progress(
+                    ui,
+                    &t,
+                    Id::new("settings-update-progress"),
+                    bar,
+                    update_progress,
+                    None,
+                    t.accent,
+                );
+            }
+            Phase::Ready(r) => {
+                if w::primary(ui, &t, Some(ph::ARROWS_CLOCKWISE), "Restart Magpie").clicked() {
+                    acts.push(Act::UpdateAction);
+                }
+                ui.label(w::subtle(
+                    &t,
+                    format!("Magpie {} is installed. Restart to use it.", r.version),
+                ));
+            }
+            _ => {
+                let checking = update_phase == Phase::Checking;
+                let label = if checking { "Checking" } else { "Check for updates" };
+                if w::spin_button(ui, &t, label, checking).clicked() {
+                    acts.push(Act::CheckUpdates);
+                }
+                match &update_phase {
+                    Phase::UpToDate => {
+                        ui.label(w::subtle(
+                            &t,
+                            format!("{}  You're on the latest version", ph::CHECK_CIRCLE),
+                        ));
+                    }
+                    Phase::Failed(e) => {
+                        ui.label(
+                            egui::RichText::new(format!("Couldn't check: {e}"))
+                                .font(theme::regular(12.5))
+                                .color(t.neg),
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        });
+        ui.add_space(6.0);
+        if w::toggle_row(ui, &t, &mut auto_update, "Automatically check for updates").changed() {
+            acts.push(Act::AutoUpdate(auto_update));
+        }
+        ui.add_space(10.0);
         ui.horizontal(|ui| {
             let (r, _) = ui.allocate_exact_size(vec2(40.0, 40.0), Sense::hover());
             crate::app::logo(ui.painter(), r, &t);
             ui.vertical(|ui| {
-                ui.label(egui::RichText::new(format!("Magpie {}", env!("CARGO_PKG_VERSION"))).font(theme::semibold(14.0)).color(t.text));
-                ui.label(w::subtle(&t, "Local-first personal finance. MIT licensed. Inter font by Rasmus Andersson (OFL), icons by Phosphor (MIT)."));
+                ui.label(
+                    egui::RichText::new(format!("Magpie {}", env!("CARGO_PKG_VERSION")))
+                        .font(theme::semibold(14.0))
+                        .color(t.text),
+                );
+                ui.label(w::subtle(&t, "Local-first personal finance. MIT licensed."));
             });
         });
     });
@@ -459,6 +547,11 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 app.toasts.ok(app.store.update_settings(|s| s.fx_auto = v));
             }
             Act::RefreshFx => app.maybe_refresh_fx(&ctx, true),
+            Act::CheckUpdates => app.updater.check(&ctx, true),
+            Act::UpdateAction => app.update_action(&ctx),
+            Act::AutoUpdate(v) => {
+                app.toasts.ok(app.store.update_settings(|s| s.auto_update = v));
+            }
             Act::SetRate(c, per_eur) => {
                 if app.toasts.ok(app.store.set_rate(c, per_eur, true)).is_some() {
                     app.settings.rate_edit = None;

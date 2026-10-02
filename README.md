@@ -100,7 +100,7 @@ What the script does on each platform:
 - **Linux:** installs `magpie` into `~/.local/bin`, and adds a desktop entry and icon so Magpie shows up in your app launcher.
 - **macOS:** installs `Magpie.app` (universal, Apple Silicon + Intel) into `/Applications`.
 
-To pin a version, set `MAGPIE_VERSION=0.1.5`.
+To pin a version, set `MAGPIE_VERSION=0.1.6`.
 
 The app isn't notarized yet. If macOS refuses to open it the first time, right-click the app and choose **Open**, or run `xattr -dr com.apple.quarantine /Applications/Magpie.app`.
 
@@ -131,7 +131,7 @@ On macOS, use `Cmd` instead of `Ctrl`.
 
 ## Your data
 
-Everything stays on your computer. There's no account and no telemetry. The only network request is the optional daily exchange-rate fetch from the ECB (via [Frankfurter](https://frankfurter.dev)).
+Everything stays on your computer. There's no account and no telemetry. Magpie only goes online for two things, and you can turn both off in Settings: the daily exchange-rate fetch from the ECB (via [Frankfurter](https://frankfurter.dev)), and a check on launch for a new Magpie release on GitHub. Updates are only downloaded when you click **Update**.
 
 | | Linux | macOS |
 |---|---|---|
@@ -173,4 +173,4 @@ Rust 1.88+ is required. See [CONTRIBUTING.md](CONTRIBUTING.md) for the project l
 
 ## License
 
-[MIT](LICENSE). Bundled assets are the [Inter](https://rsms.me/inter/) font (SIL OFL 1.1) and [Phosphor](https://phosphoricons.com) icons (MIT).
+[MIT](LICENSE). The bundled fonts, icons and libraries keep their own licenses, listed in [THIRD-PARTY-LICENSES.txt](THIRD-PARTY-LICENSES.txt) (also shipped with every download, and printed by `magpie --licenses`).

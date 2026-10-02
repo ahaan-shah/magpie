@@ -25,6 +25,8 @@ pub struct Settings {
     pub scroll_speed: f32,
     /// Interface font name.
     pub font: String,
+    /// Look for a new Magpie release on launch.
+    pub auto_update: bool,
 }
 
 impl Default for Settings {
@@ -39,6 +41,7 @@ impl Default for Settings {
             ui_scale: 1.0,
             scroll_speed: 1.0,
             font: "Inter".into(),
+            auto_update: true,
         }
     }
 }
@@ -121,6 +124,9 @@ impl Store {
         }
         if let Some(v) = db.setting("scroll_speed")?.and_then(|v| v.parse::<f32>().ok()) {
             settings.scroll_speed = v.clamp(0.25, 4.0);
+        }
+        if let Some(v) = db.setting("auto_update")? {
+            settings.auto_update = v == "1";
         }
 
         let mut rates = Rates::defaults();
@@ -205,6 +211,7 @@ impl Store {
         db.set_setting("ui_scale", &format!("{:.2}", s.ui_scale))?;
         db.set_setting("scroll_speed", &format!("{:.2}", s.scroll_speed))?;
         db.set_setting("font", &s.font)?;
+        db.set_setting("auto_update", if s.auto_update { "1" } else { "0" })?;
         if let Some(a) = s.default_account {
             db.set_setting("default_account", &a.to_string())?;
         }

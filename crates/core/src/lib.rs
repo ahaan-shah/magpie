@@ -15,6 +15,7 @@ pub mod receipts;
 pub mod recurring;
 pub mod statement;
 pub mod store;
+pub mod update;
 
 pub use model::*;
 pub use money::Cur;

@@ -30,6 +30,7 @@ foreach ($arch in $targets.Keys) {
     Copy-Item "target\$target\dist\magpie.exe" $stage
     Copy-Item LICENSE "$stage\LICENSE.txt"
     Copy-Item README.md $stage
+    Copy-Item THIRD-PARTY-LICENSES.txt $stage
     Compress-Archive -Path "$stage\*" -DestinationPath "dist\Magpie-windows-$arch.zip" -Force
     Remove-Item -Recurse -Force $stage
     Write-Host "Built dist\Magpie-windows-$arch.zip"

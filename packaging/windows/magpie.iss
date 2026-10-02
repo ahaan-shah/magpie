@@ -65,6 +65,7 @@ Source: "{#SrcX64}"; DestDir: "{app}"; DestName: "magpie.exe"; Check: not IsArm6
 Source: "{#SrcArm64}"; DestDir: "{app}"; DestName: "magpie.exe"; Check: IsArm64; Flags: ignoreversion
 Source: "..\..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "..\..\README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\THIRD-PARTY-LICENSES.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\Magpie"; Filename: "{app}\magpie.exe"; Comment: "Personal finance tracker"
