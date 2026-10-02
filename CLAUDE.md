@@ -194,8 +194,9 @@ the real app. Release builds use fat LTO and take minutes; use
 5. Asset names are a contract with `install.sh`, `install.ps1` and the
    in-app updater (`update::asset_name`). Don't rename them.
 
-Install paths for users: `install.sh` (curl one-liner) for Linux/macOS is the
-only documented method for now. AUR, Homebrew and `cargo install` were pulled
+Install paths for users: `install.sh` (curl one-liner) for Linux/macOS and
+`install.ps1` (`irm … | iex`) or the setup .exe for Windows are the
+documented methods. AUR, Homebrew and `cargo install` were pulled
 from the README until they're actually published. The PKGBUILD and cask in
 `packaging/` are ready but unpublished.
 
