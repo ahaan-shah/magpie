@@ -305,6 +305,11 @@ impl Pointer {
 /// software rasterizer for deterministic tests, which is far too slow for
 /// thousands of 4K frames.)
 pub(crate) fn gpu_renderer() -> WgpuTestRenderer {
+    WgpuTestRenderer::from_setup(gpu_setup())
+}
+
+/// wgpu setup that picks the discrete GPU, then integrated, then software.
+pub(crate) fn gpu_setup() -> egui_wgpu::WgpuSetup {
     use egui_wgpu::wgpu;
     let mut setup = egui_wgpu::WgpuSetupCreateNew::without_display_handle();
     setup
@@ -326,7 +331,7 @@ pub(crate) fn gpu_renderer() -> WgpuTestRenderer {
         eprintln!("film: rendering on {}", pick.get_info().name);
         Ok(pick)
     }));
-    WgpuTestRenderer::from_setup(egui_wgpu::WgpuSetup::CreateNew(setup))
+    egui_wgpu::WgpuSetup::CreateNew(setup)
 }
 
 /// H.264 encoder arguments: NVIDIA's hardware encoder when ffmpeg has it,
