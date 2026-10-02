@@ -277,3 +277,6 @@ mod monkey;
 
 #[cfg(test)]
 mod film;
+
+#[cfg(test)]
+mod promo;

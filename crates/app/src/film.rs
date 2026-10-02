@@ -37,14 +37,14 @@ const INTRO_END: f32 = 3.0;
 const OUTRO_START: f32 = 41.8;
 
 #[derive(Clone)]
-enum Target {
+pub(crate) enum Target {
     Mark(String),
     Widget(Id),
     Point(Pos2),
 }
 
 impl Target {
-    fn rect(&self, ctx: &Context) -> Option<Rect> {
+    pub(crate) fn rect(&self, ctx: &Context) -> Option<Rect> {
         match self {
             Target::Mark(k) => crate::marks::get(k),
             Target::Widget(id) => ctx.read_response(*id).map(|r| r.rect),
@@ -53,12 +53,12 @@ impl Target {
     }
 }
 
-fn mark(k: &str) -> Target {
+pub(crate) fn mark(k: &str) -> Target {
     Target::Mark(k.to_string())
 }
 
 #[derive(Clone)]
-enum Act {
+pub(crate) enum Act {
     /// Glide the pointer to a target (optionally offset) over `dur` seconds.
     Move(Target, Vec2, f32),
     Click,
@@ -66,9 +66,9 @@ enum Act {
     Key(Key, Modifiers),
 }
 
-struct Beat {
-    t: f32,
-    act: Act,
+pub(crate) struct Beat {
+    pub t: f32,
+    pub act: Act,
 }
 
 /// Camera keyframe: zoom level and what to centre on.
@@ -110,7 +110,7 @@ fn script() -> (Vec<Beat>, Vec<Cam>, Vec<Caption>) {
     };
     let cmd = Modifiers::COMMAND;
     let cash = format!("chart:{:?}", Id::new("dash-cashflow"));
-    let rep = format!("chart:{:?}", Id::new(("rep-cash", 0usize)));
+    let rep = "rep:cash".to_string();
 
     let beats = vec![
         // Dashboard
@@ -278,13 +278,13 @@ fn script() -> (Vec<Beat>, Vec<Cam>, Vec<Caption>) {
 }
 
 /// Pointer state machine driven by the beats.
-struct Pointer {
-    pos: Pos2,
+pub(crate) struct Pointer {
+    pub pos: Pos2,
     from: Pos2,
     to: Pos2,
     start: f32,
     dur: f32,
-    ripples: Vec<(Pos2, f32)>,
+    pub ripples: Vec<(Pos2, f32)>,
 }
 
 impl Pointer {
@@ -298,6 +298,190 @@ impl Pointer {
         let d = self.to - self.from;
         let normal = vec2(-d.y, d.x).normalized() * (d.length() * 0.06);
         mid + normal * (k * std::f32::consts::PI).sin()
+    }
+}
+
+/// A renderer on the real GPU. (kittest's default deliberately picks a
+/// software rasterizer for deterministic tests, which is far too slow for
+/// thousands of 4K frames.)
+pub(crate) fn gpu_renderer() -> WgpuTestRenderer {
+    use egui_wgpu::wgpu;
+    let mut setup = egui_wgpu::WgpuSetupCreateNew::without_display_handle();
+    setup
+        .instance_descriptor
+        .backends
+        .remove(wgpu::Backends::BROWSER_WEBGPU);
+    setup.native_adapter_selector = Some(std::sync::Arc::new(|adapters, _surface| {
+        let mut list: Vec<_> = adapters.iter().collect();
+        list.sort_by_key(|a| match a.get_info().device_type {
+            wgpu::DeviceType::DiscreteGpu => 0,
+            wgpu::DeviceType::IntegratedGpu => 1,
+            wgpu::DeviceType::Other | wgpu::DeviceType::VirtualGpu => 2,
+            wgpu::DeviceType::Cpu => 3,
+        });
+        let pick = list
+            .first()
+            .map(|a| (*a).clone())
+            .ok_or_else(|| "No adapter found".to_owned())?;
+        eprintln!("film: rendering on {}", pick.get_info().name);
+        Ok(pick)
+    }));
+    WgpuTestRenderer::from_setup(egui_wgpu::WgpuSetup::CreateNew(setup))
+}
+
+/// H.264 encoder arguments: NVIDIA's hardware encoder when ffmpeg has it,
+/// else x264.
+pub(crate) fn encoder_args() -> Vec<&'static str> {
+    let nvenc = Command::new("ffmpeg")
+        .args(["-hide_banner", "-encoders"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("h264_nvenc"))
+        .unwrap_or(false);
+    if nvenc && std::env::var_os("MAGPIE_FILM_X264").is_none() {
+        vec![
+            "-c:v",
+            "h264_nvenc",
+            "-preset",
+            "p7",
+            "-tune",
+            "hq",
+            "-rc",
+            "vbr",
+            "-cq",
+            "17",
+            "-b:v",
+            "0",
+            "-profile:v",
+            "high",
+            "-pix_fmt",
+            "yuv420p",
+        ]
+    } else {
+        vec![
+            "-c:v", "libx264", "-preset", "slow", "-crf", "16", "-pix_fmt", "yuv420p",
+        ]
+    }
+}
+
+/// Turns a beat script into egui input, frame by frame: pointer glides,
+/// clicks, human-paced typing and key presses.
+pub(crate) struct Driver {
+    beats: Vec<Beat>,
+    next: usize,
+    pub pointer: Pointer,
+    typing: Vec<(f32, String)>,
+    pending: Vec<(f32, Event)>,
+    first: bool,
+}
+
+impl Driver {
+    pub(crate) fn new(beats: Vec<Beat>, start: Pos2) -> Driver {
+        Driver {
+            beats,
+            next: 0,
+            pointer: Pointer {
+                pos: start,
+                from: start,
+                to: start,
+                start: 0.0,
+                dur: 0.0,
+                ripples: Vec::new(),
+            },
+            typing: Vec::new(),
+            pending: Vec::new(),
+            first: true,
+        }
+    }
+
+    /// The input events for the frame at time `t`.
+    pub(crate) fn events(&mut self, ctx: &Context, t: f32) -> Vec<Event> {
+        let mut events = Vec::new();
+        let pointer = &mut self.pointer;
+        while self.next < self.beats.len() && self.beats[self.next].t <= t {
+            let beat = &self.beats[self.next];
+            match &beat.act {
+                Act::Move(target, off, dur) => {
+                    let to = target.rect(ctx).map(|r| r.center() + *off).unwrap_or(pointer.pos);
+                    pointer.from = pointer.pos;
+                    pointer.to = to;
+                    pointer.start = beat.t;
+                    pointer.dur = *dur;
+                }
+                Act::Click => {
+                    let at = pointer.pos;
+                    pointer.ripples.push((at, t));
+                    events.push(Event::PointerButton {
+                        pos: at,
+                        button: PointerButton::Primary,
+                        pressed: true,
+                        modifiers: Modifiers::NONE,
+                    });
+                    self.pending.push((
+                        t + 0.07,
+                        Event::PointerButton {
+                            pos: at,
+                            button: PointerButton::Primary,
+                            pressed: false,
+                            modifiers: Modifiers::NONE,
+                        },
+                    ));
+                }
+                Act::Type(text, cps) => {
+                    // Human-ish rhythm: deterministic jitter, pauses after spaces.
+                    let mut at = beat.t;
+                    let mut seed = 7u32;
+                    for ch in text.chars() {
+                        self.typing.push((at, ch.to_string()));
+                        seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                        let jitter = ((seed >> 16) % 100) as f32 / 100.0 - 0.5;
+                        at += (1.0 / cps) * (1.0 + 0.45 * jitter) + if ch == ' ' { 0.04 } else { 0.0 };
+                    }
+                }
+                Act::Key(key, mods) => {
+                    events.push(Event::Key {
+                        key: *key,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: *mods,
+                    });
+                    self.pending.push((
+                        t + 0.05,
+                        Event::Key {
+                            key: *key,
+                            physical_key: None,
+                            pressed: false,
+                            repeat: false,
+                            modifiers: *mods,
+                        },
+                    ));
+                }
+            }
+            self.next += 1;
+        }
+        self.typing.retain(|(at, ch)| {
+            if *at <= t {
+                events.push(Event::Text(ch.clone()));
+                false
+            } else {
+                true
+            }
+        });
+        self.pending.retain(|(at, ev)| {
+            if *at <= t {
+                events.push(ev.clone());
+                false
+            } else {
+                true
+            }
+        });
+        let new_pos = pointer.at(t);
+        if (new_pos - pointer.pos).length() > 0.01 || self.first {
+            events.insert(0, Event::PointerMoved(new_pos));
+        }
+        pointer.pos = new_pos;
+        self.first = false;
+        events
     }
 }
 
@@ -388,36 +572,7 @@ fn overlay(ctx: &Context, t: f32, zoom: f32, center: Pos2, pointer: &Pointer, ca
                 p.circle_filled(*at, r * 0.6, Color32::from_white_alpha((50.0 * (1.0 - k)) as u8));
             }
         }
-        let tip = pointer.pos;
-        let arrow = [
-            (0.0, 0.0),
-            (0.0, 17.0),
-            (4.2, 13.0),
-            (7.2, 19.6),
-            (9.9, 18.4),
-            (7.0, 12.0),
-            (12.6, 12.0),
-        ];
-        let pts: Vec<Pos2> = arrow.iter().map(|(x, y)| tip + vec2(*x, *y) * 1.25 * s).collect();
-        let shadow: Vec<Pos2> = pts.iter().map(|q| *q + vec2(1.2, 2.0) * s).collect();
-        p.add(Shape::convex_polygon(
-            shadow,
-            Color32::from_black_alpha(70),
-            Stroke::NONE,
-        ));
-        p.add(Shape::closed_line(pts.clone(), Stroke::new(2.4 * s, Color32::BLACK)));
-        // Fill as two convex pieces (the arrow outline is concave).
-        p.add(Shape::convex_polygon(
-            vec![pts[0], pts[1], pts[2], pts[5], pts[6]],
-            Color32::WHITE,
-            Stroke::NONE,
-        ));
-        p.add(Shape::convex_polygon(
-            vec![pts[2], pts[3], pts[4], pts[5]],
-            Color32::WHITE,
-            Stroke::NONE,
-        ));
-        p.add(Shape::closed_line(pts, Stroke::new(1.1 * s, Color32::BLACK)));
+        paint_cursor(&p, pointer.pos, s);
     }
 
     // Title cards.
@@ -499,6 +654,39 @@ fn overlay(ctx: &Context, t: f32, zoom: f32, center: Pos2, pointer: &Pointer, ca
     }
 }
 
+/// The macOS-style arrow pointer with a soft shadow, `s` = scale.
+pub(crate) fn paint_cursor(p: &egui::Painter, tip: Pos2, s: f32) {
+    let arrow = [
+        (0.0, 0.0),
+        (0.0, 17.0),
+        (4.2, 13.0),
+        (7.2, 19.6),
+        (9.9, 18.4),
+        (7.0, 12.0),
+        (12.6, 12.0),
+    ];
+    let pts: Vec<Pos2> = arrow.iter().map(|(x, y)| tip + vec2(*x, *y) * 1.25 * s).collect();
+    let shadow: Vec<Pos2> = pts.iter().map(|q| *q + vec2(1.2, 2.0) * s).collect();
+    p.add(Shape::convex_polygon(
+        shadow,
+        Color32::from_black_alpha(70),
+        Stroke::NONE,
+    ));
+    p.add(Shape::closed_line(pts.clone(), Stroke::new(2.4 * s, Color32::BLACK)));
+    // Fill as two convex pieces (the arrow outline is concave).
+    p.add(Shape::convex_polygon(
+        vec![pts[0], pts[1], pts[2], pts[5], pts[6]],
+        Color32::WHITE,
+        Stroke::NONE,
+    ));
+    p.add(Shape::convex_polygon(
+        vec![pts[2], pts[3], pts[4], pts[5]],
+        Color32::WHITE,
+        Stroke::NONE,
+    ));
+    p.add(Shape::closed_line(pts, Stroke::new(1.1 * s, Color32::BLACK)));
+}
+
 /// Crops `view` (in source pixels) out of `src` and resamples it to the
 /// output size with 2x2 supersampled bilinear filtering (sub-pixel accurate,
 /// so slow pans and zooms don't shimmer). Multithreaded by row bands.
@@ -572,33 +760,21 @@ fn film() {
 
     let ctx = Context::default();
     let mut app = App::with_context(&ctx, None, store);
-    let mut renderer = WgpuTestRenderer::new();
+    let mut renderer = gpu_renderer();
     let (beats, cams, captions) = script();
     let mut cam_cache: Vec<Option<Pos2>> = Vec::new();
 
     let mut ffmpeg = Command::new("ffmpeg")
         .args(["-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgba"])
         .args(["-s", &format!("{OUT_W}x{OUT_H}"), "-r", &format!("{FPS}"), "-i", "-"])
-        .args([
-            "-c:v", "libx264", "-preset", "slow", "-crf", "16", "-pix_fmt", "yuv420p",
-        ])
+        .args(encoder_args())
         .args(["-movflags", "+faststart", &out_path])
         .stdin(Stdio::piped())
         .spawn()
         .expect("ffmpeg");
     let mut sink = ffmpeg.stdin.take().expect("stdin");
 
-    let mut pointer = Pointer {
-        pos: pos2(W / 2.0, H / 2.0),
-        from: pos2(W / 2.0, H / 2.0),
-        to: pos2(W / 2.0, H / 2.0),
-        start: 0.0,
-        dur: 0.0,
-        ripples: Vec::new(),
-    };
-    let mut typing: Vec<(f32, String)> = Vec::new();
-    let mut pending: Vec<(f32, Event)> = Vec::new();
-    let mut next_beat = 0;
+    let mut driver = Driver::new(beats, pos2(W / 2.0, H / 2.0));
     let frames = (DURATION * FPS) as usize;
     let mut out = vec![0u8; OUT_W * OUT_H * 4];
     let mut started = false;
@@ -606,90 +782,8 @@ fn film() {
 
     for frame in 0..frames {
         let t = frame as f32 / FPS;
-        let mut events = Vec::new();
-        while next_beat < beats.len() && beats[next_beat].t <= t {
-            let beat = &beats[next_beat];
-            match &beat.act {
-                Act::Move(target, off, dur) => {
-                    let to = target.rect(&ctx).map(|r| r.center() + *off).unwrap_or(pointer.pos);
-                    pointer.from = pointer.pos;
-                    pointer.to = to;
-                    pointer.start = beat.t;
-                    pointer.dur = *dur;
-                }
-                Act::Click => {
-                    let at = pointer.pos;
-                    pointer.ripples.push((at, t));
-                    events.push(Event::PointerButton {
-                        pos: at,
-                        button: PointerButton::Primary,
-                        pressed: true,
-                        modifiers: Modifiers::NONE,
-                    });
-                    pending.push((
-                        t + 0.07,
-                        Event::PointerButton {
-                            pos: at,
-                            button: PointerButton::Primary,
-                            pressed: false,
-                            modifiers: Modifiers::NONE,
-                        },
-                    ));
-                }
-                Act::Type(text, cps) => {
-                    // Human-ish rhythm: deterministic jitter, pauses after spaces.
-                    let mut at = beat.t;
-                    let mut seed = 7u32;
-                    for ch in text.chars() {
-                        typing.push((at, ch.to_string()));
-                        seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
-                        let jitter = ((seed >> 16) % 100) as f32 / 100.0 - 0.5;
-                        at += (1.0 / cps) * (1.0 + 0.45 * jitter) + if ch == ' ' { 0.04 } else { 0.0 };
-                    }
-                }
-                Act::Key(key, mods) => {
-                    events.push(Event::Key {
-                        key: *key,
-                        physical_key: None,
-                        pressed: true,
-                        repeat: false,
-                        modifiers: *mods,
-                    });
-                    pending.push((
-                        t + 0.05,
-                        Event::Key {
-                            key: *key,
-                            physical_key: None,
-                            pressed: false,
-                            repeat: false,
-                            modifiers: *mods,
-                        },
-                    ));
-                }
-            }
-            next_beat += 1;
-        }
-        typing.retain(|(at, ch)| {
-            if *at <= t {
-                events.push(Event::Text(ch.clone()));
-                false
-            } else {
-                true
-            }
-        });
-        pending.retain(|(at, ev)| {
-            if *at <= t {
-                events.push(ev.clone());
-                false
-            } else {
-                true
-            }
-        });
-        let new_pos = pointer.at(t);
-        if (new_pos - pointer.pos).length() > 0.01 || frame == 0 {
-            events.insert(0, Event::PointerMoved(new_pos));
-        }
-        pointer.pos = new_pos;
+        let events = driver.events(&ctx, t);
+        let pointer = &driver.pointer;
 
         // The app starts as the intro card begins to fade, so the dashboard's
         // entrance animations play on screen.
@@ -718,7 +812,7 @@ fn film() {
             } else {
                 ui.painter().rect_filled(ui.max_rect(), 0.0, Color32::BLACK);
             }
-            overlay(ui.ctx(), t, zoom, center, &pointer, &captions);
+            overlay(ui.ctx(), t, zoom, center, pointer, &captions);
         });
         renderer.handle_delta(&mut output.textures_delta);
         let img = renderer.render(&ctx, &output).expect("render");

@@ -1727,6 +1727,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui-phosphor",
+ "egui-wgpu",
  "egui_kittest",
  "image",
  "jiff",

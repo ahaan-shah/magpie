@@ -311,6 +311,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     .collect();
                 let net: Vec<f32> = d.cashflow.iter().map(|x| x.net() as f32).collect();
                 let r = ui.available_rect_before_wrap();
+                crate::marks::record(|| "rep:cash".into(), r);
                 charts::grouped_bars(
                     ui,
                     &t,

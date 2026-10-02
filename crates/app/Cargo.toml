@@ -42,3 +42,4 @@ winresource = "0.1"
 
 [dev-dependencies]
 egui_kittest = { version = "0.36", features = ["wgpu", "snapshot"] }
+egui-wgpu = "0.36"
