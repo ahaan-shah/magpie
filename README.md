@@ -166,7 +166,7 @@ Measured on Arch Linux (Hyprland, NVIDIA):
 |---|---|
 | Launch to first frame | ~115 ms |
 | Idle CPU | 0% |
-| Memory (RAM) | Under 150 MB |
+| Memory (RAM) | ~140 MB |
 | Load 100,000 transactions from disk | ~125 ms |
 | Dashboard aggregates over 100k transactions | ~7 ms (recomputed only when data changes) |
 | Release binary | ~16 MB, no runtime dependencies beyond system GL |
