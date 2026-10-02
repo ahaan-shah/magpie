@@ -6,7 +6,7 @@ your line when the work is merged.
 
 | Topic | Branch | Areas / files | Status |
 |---|---|---|---|
-| _(none active)_ | | | |
+| Release 0.2.0 (Windows) | agent/release-0.2.0 | versions, CHANGELOG, README, `update.rs`, `release.yml`, packaging | in progress |
 
 ## Reserved
 
