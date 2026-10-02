@@ -1702,7 +1702,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "magpie-core"
-version = "0.1.6"
+version = "0.2.0"
 dependencies = [
  "blake3",
  "calamine",
@@ -1718,11 +1718,12 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "ureq",
+ "zip",
 ]
 
 [[package]]
 name = "magpie-finance"
-version = "0.1.6"
+version = "0.2.0"
 dependencies = [
  "eframe",
  "egui",

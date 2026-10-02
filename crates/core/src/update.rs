@@ -178,7 +178,7 @@ pub fn plan() -> Plan {
     }
     let dir = target.parent().unwrap_or(Path::new("."));
     if !writable_dir(dir) {
-        return Plan::Manual(format!("Magpie can't write to {}", dir.display()));
+        return Plan::Manual(format!("Magpie can't write to {}", shown(dir)));
     }
     Plan::Replace { asset, target }
 }
@@ -287,12 +287,7 @@ pub fn install(release: &Release, progress: &dyn Fn(f32)) -> Result<()> {
                 .arg(&file)
                 .arg(&unpacked))?;
         } else {
-            // Windows 10+ ships bsdtar, which reads zips.
-            run(std::process::Command::new("tar")
-                .arg("-xf")
-                .arg(&file)
-                .arg("-C")
-                .arg(&unpacked))?;
+            unzip(&file, &unpacked)?;
         }
         let fresh = find(&unpacked, target.file_name().unwrap_or_default())
             .ok_or_else(|| Error::Msg("the download doesn't contain Magpie".into()))?;
@@ -300,6 +295,18 @@ pub fn install(release: &Release, progress: &dyn Fn(f32)) -> Result<()> {
     })();
     let _ = std::fs::remove_dir_all(&work);
     result
+}
+
+/// Unpacks a zip in-process. Not `tar`: on Windows a Git or MSYS `tar`
+/// earlier on PATH reads "C:\…" as a remote host, and starting a console
+/// program from a GUI app flashes a terminal window.
+fn unzip(file: &Path, to: &Path) -> Result<()> {
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(file)?)
+        .map_err(|e| Error::Msg(format!("the download isn't a valid zip ({e})")))?;
+    // `extract` refuses entries that would land outside `to`.
+    archive
+        .extract(to)
+        .map_err(|e| Error::Msg(format!("couldn't unpack the download ({e})")))
 }
 
 /// Finds `name` anywhere under `dir` (archives nest it in a folder).
@@ -336,9 +343,9 @@ fn swap(fresh: &Path, target: &Path) -> Result<()> {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(fresh, std::fs::Permissions::from_mode(0o755))?;
     }
-    std::fs::rename(target, &old)?;
-    if let Err(e) = std::fs::rename(fresh, target) {
-        let _ = std::fs::rename(&old, target);
+    rename(target, &old)?;
+    if let Err(e) = rename(fresh, target) {
+        let _ = rename(&old, target);
         return Err(e.into());
     }
     // A running Windows exe can be renamed but not deleted; it's cleaned up
@@ -356,6 +363,31 @@ fn swap(fresh: &Path, target: &Path) -> Result<()> {
             .output();
     }
     Ok(())
+}
+
+/// `fs::rename`, retried for up to two seconds on Windows, where an
+/// antivirus scan of a freshly written exe holds it open for a moment.
+fn rename(from: &Path, to: &Path) -> std::io::Result<()> {
+    let mut tries = 0;
+    loop {
+        match std::fs::rename(from, to) {
+            Err(_) if cfg!(windows) && tries < 20 => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            r => return r,
+        }
+    }
+}
+
+/// A path as people write it: without Windows' `\\?\` prefix, which
+/// `canonicalize` adds.
+fn shown(p: &Path) -> String {
+    let s = p.display().to_string();
+    match s.strip_prefix(r"\\?\") {
+        Some(rest) if !rest.starts_with("UNC") => rest.to_string(),
+        _ => s,
+    }
 }
 
 /// Removes what a previous update left behind (the old Windows exe).
@@ -452,6 +484,90 @@ mod tests {
         .unwrap();
         let fresh = find(&work.join("unpacked"), std::ffi::OsStr::new("magpie")).unwrap();
         swap(&fresh, &target).unwrap();
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "new build");
+    }
+    #[test]
+    fn asset_names_match_release_builds() {
+        // A contract with release.yml, install.sh and install.ps1.
+        let known = [
+            "magpie-x86_64-unknown-linux-gnu.tar.gz",
+            "magpie-aarch64-unknown-linux-gnu.tar.gz",
+            "Magpie-macos-universal.zip",
+            "Magpie-windows-x64.zip",
+            "Magpie-windows-arm64.zip",
+        ];
+        let name = asset_name().expect("CI platforms have a release build");
+        assert!(known.contains(&name.as_str()), "{name}");
+    }
+
+    #[test]
+    fn shown_drops_verbatim_prefix() {
+        assert_eq!(
+            shown(Path::new(r"\\?\C:\Program Files\Magpie")),
+            r"C:\Program Files\Magpie"
+        );
+        assert_eq!(shown(Path::new("/usr/bin")), "/usr/bin");
+    }
+
+    /// A zip laid out like the Windows release (exe at the root, docs next
+    /// to it) installs over the target, on every platform.
+    #[test]
+    fn install_from_zip() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = dir.path().join("Magpie-windows-x64.zip");
+        let mut w = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+        let opts = zip::write::SimpleFileOptions::default();
+        for (name, body) in [
+            ("README.md", "docs"),
+            ("magpie.exe", "new build"),
+            ("LICENSE.txt", "MIT"),
+        ] {
+            w.start_file(name, opts).unwrap();
+            w.write_all(body.as_bytes()).unwrap();
+        }
+        w.finish().unwrap();
+
+        let unpacked = dir.path().join("unpacked");
+        std::fs::create_dir_all(&unpacked).unwrap();
+        unzip(&zip_path, &unpacked).unwrap();
+        let fresh = find(&unpacked, std::ffi::OsStr::new("magpie.exe")).unwrap();
+        let target = dir.path().join("magpie.exe");
+        std::fs::write(&target, "old build").unwrap();
+        swap(&fresh, &target).unwrap();
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "new build");
+
+        // A corrupt download fails cleanly instead of panicking.
+        let bad = dir.path().join("bad.zip");
+        std::fs::write(&bad, "not a zip").unwrap();
+        assert!(unzip(&bad, &unpacked).is_err());
+    }
+
+    /// Windows won't delete a running exe but will rename it: the update
+    /// swaps in the new one while the old keeps running, and the leftover is
+    /// removed on the next launch.
+    #[cfg(windows)]
+    #[test]
+    fn swap_replaces_a_running_exe() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("magpie.exe");
+        let system = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+        std::fs::copy(Path::new(&system).join(r"System32\cmd.exe"), &target).unwrap();
+        let mut running = std::process::Command::new(&target)
+            .args(["/c", "ping", "-n", "30", "127.0.0.1"])
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        // Deleting it really is refused while it runs.
+        assert!(std::fs::remove_file(&target).is_err());
+
+        let fresh = dir.path().join("fresh.exe");
+        std::fs::write(&fresh, "new build").unwrap();
+        let r = swap(&fresh, &target);
+        let _ = running.kill();
+        let _ = running.wait();
+        r.unwrap();
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "new build");
     }
 }

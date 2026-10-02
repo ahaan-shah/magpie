@@ -42,6 +42,9 @@ pub struct Updater {
     launch_done: bool,
     manual: bool,
     restart_on_exit: bool,
+    /// Where this copy was launched from, read before any update swaps it:
+    /// afterwards Linux reports the renamed old file ("….old (deleted)").
+    exe: Option<std::path::PathBuf>,
 }
 
 impl Default for Updater {
@@ -56,6 +59,7 @@ impl Default for Updater {
             launch_done: false,
             manual: false,
             restart_on_exit: false,
+            exe: std::env::current_exe().ok(),
         }
     }
 }
@@ -162,7 +166,7 @@ impl Updater {
         if !self.restart_on_exit {
             return;
         }
-        let Ok(exe) = std::env::current_exe() else { return };
+        let Some(exe) = self.exe.clone() else { return };
         #[cfg(target_os = "macos")]
         {
             // Relaunch the bundle so macOS treats it as the same app.

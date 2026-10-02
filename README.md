@@ -100,9 +100,23 @@ What the script does on each platform:
 - **Linux:** installs `magpie` into `~/.local/bin`, and adds a desktop entry and icon so Magpie shows up in your app launcher.
 - **macOS:** installs `Magpie.app` (universal, Apple Silicon + Intel) into `/Applications`.
 
-To pin a version, set `MAGPIE_VERSION=0.1.6`.
+To pin a version, set `MAGPIE_VERSION=0.2.0`.
 
 The app isn't notarized yet. If macOS refuses to open it the first time, right-click the app and choose **Open**, or run `xattr -dr com.apple.quarantine /Applications/Magpie.app`.
+
+### Windows (one line)
+
+In PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/ahaan-shah/magpie/main/install.ps1 | iex
+```
+
+This installs Magpie just for you (no admin prompt) into `%LOCALAPPDATA%\Programs\Magpie` and adds it to the Start menu. It works on Windows 10 (1809 or newer) and Windows 11, on both x64 and ARM64 PCs. To pin a version, run `$env:MAGPIE_VERSION = "0.2.0"` first.
+
+You can also download `Magpie-windows-setup.exe` from the [latest release](https://github.com/ahaan-shah/magpie/releases/latest) and run it, or use the portable zip (`Magpie-windows-x64.zip` or `Magpie-windows-arm64.zip`). The installer isn't code-signed yet, so SmartScreen may say "Windows protected your PC". Click **More info**, then **Run anyway**.
+
+To uninstall, use **Settings → Apps**. Your data is kept.
 
 ## Keyboard
 
@@ -133,10 +147,10 @@ On macOS, use `Cmd` instead of `Ctrl`.
 
 Everything stays on your computer. There's no account and no telemetry. Magpie only goes online for two things, and you can turn both off in Settings: the daily exchange-rate fetch from the ECB (via [Frankfurter](https://frankfurter.dev)), and a check on launch for a new Magpie release on GitHub. Updates are only downloaded when you click **Update**.
 
-| | Linux | macOS |
-|---|---|---|
-| Database & receipts | `~/.local/share/magpie/` | `~/Library/Application Support/dev.magpie.magpie/` |
-| Exports | `~/Downloads` | `~/Downloads` |
+| | Linux | macOS | Windows |
+|---|---|---|---|
+| Database & receipts | `~/.local/share/magpie/` | `~/Library/Application Support/dev.magpie.magpie/` | `%APPDATA%\magpie\magpie\data\` |
+| Exports | `~/Downloads` | `~/Downloads` | `Downloads` |
 
 The database is a single SQLite file, `magpie.db`. Back it up from Settings, or just copy it.
 

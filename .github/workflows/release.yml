@@ -80,6 +80,43 @@ jobs:
       - name: Smoke test (install, run, screenshot every page, uninstall)
         shell: pwsh
         run: ./scripts/smoke-windows.ps1 dist/Magpie-windows-setup.exe windows-screenshots
+      - name: Zips hold magpie.exe at the root (the in-app updater expects it)
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          foreach ($arch in 'x64', 'arm64') {
+            $zip = [IO.Compression.ZipFile]::OpenRead((Resolve-Path "dist/Magpie-windows-$arch.zip"))
+            $names = @($zip.Entries.FullName); $zip.Dispose()
+            Write-Host "${arch}: $($names -join ', ')"
+            if ($names -notcontains 'magpie.exe') { throw "magpie.exe isn't at the root of the $arch zip" }
+          }
+      - name: install.ps1 one-liner (Windows PowerShell 5.1, local mirror)
+        shell: pwsh
+        run: |
+          $mirror = Join-Path $env:RUNNER_TEMP 'mirror'
+          New-Item -ItemType Directory -Force $mirror | Out-Null
+          Copy-Item dist/Magpie-windows-setup.exe, install.ps1 $mirror
+          $hash = (Get-FileHash "$mirror/Magpie-windows-setup.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  Magpie-windows-setup.exe" | Set-Content "$mirror/SHA256SUMS"
+          $server = Start-Process python -ArgumentList '-m', 'http.server', '8765', '--bind', '127.0.0.1' -WorkingDirectory $mirror -PassThru -WindowStyle Hidden
+          try {
+            for ($i = 0; $i -lt 30; $i++) {
+              try { Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8765/SHA256SUMS | Out-Null; break } catch { Start-Sleep 1 }
+            }
+            $env:MAGPIE_BASE_URL = 'http://127.0.0.1:8765'
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -Command 'irm http://127.0.0.1:8765/install.ps1 | iex'
+            if ($LASTEXITCODE -ne 0) { throw "install.ps1 failed ($LASTEXITCODE)" }
+            $exe = Join-Path $env:LOCALAPPDATA 'Programs\Magpie\magpie.exe'
+            if (-not (Test-Path $exe)) { throw "install.ps1 didn't install $exe" }
+            $out = Join-Path $env:RUNNER_TEMP 'version.txt'
+            Start-Process $exe -ArgumentList '--version' -Wait -NoNewWindow -RedirectStandardOutput $out
+            $version = (Get-Content $out -Raw).Trim()
+            Write-Host "installed: $version"
+            if ($version -notmatch '^magpie \d+\.\d+\.\d+$') { throw "--version failed: '$version'" }
+            if (-not (Test-Path (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Magpie.lnk'))) { throw "no Start menu shortcut" }
+          } finally {
+            Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+          }
       - uses: actions/upload-artifact@v4
         if: always()
         with:

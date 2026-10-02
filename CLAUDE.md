@@ -128,6 +128,10 @@ crates/app   (magpie-finance) the eframe app; binary `magpie`
   superellipse SVG. Linux installs **SVG only** (PNGs got upscaled and blurred
   on 2× screens), with hinted 16/24 px variants. The SVG deliberately avoids
   filters, clip paths and `<use>` so Qt, GTK and browsers draw it the same.
+- **Updater gotchas:** Linux's `current_exe()` follows the renamed old
+  binary after a swap, so restart uses the path captured at launch. Windows
+  zips are unpacked with the `zip` crate, not `tar` (Git's GNU tar on PATH
+  misreads `C:\`, and a console child flashes a window).
 - **Updates check automatically but never install on their own.** The user
   clicks Update, then Restart. Package-manager installs get a download link
   (`Plan::Manual`).
@@ -200,13 +204,16 @@ from the README until they're actually published. The PKGBUILD and cask in
 
 - **Released:** up to v0.1.6 (0.1.5 was folded into 0.1.6). The repo was
   private until 0.1.6, then made public.
-- **Windows (0.2.0, on hold):** code, CI, Inno Setup installer
-  (`packaging/windows/magpie.iss`, x64+ARM64 in one, per-user, upgrades in
-  place, keeps data on uninstall), `install.ps1`, and the smoke test are done
-  and green. `release.yml` skips Windows for `v0.1.*` tags. The README's
-  Windows section was held back; restore it at 0.2.0 (install via
-  `irm …/install.ps1 | iex`, SmartScreen note, `%APPDATA%\magpie\magpie\data`).
-  Unsigned for now (Azure Trusted Signing later).
+- **Windows (0.2.0):** prepared on `agent/release-0.2.0` (version bump,
+  CHANGELOG, README Windows section); tagging waits for the maintainer.
+  Inno Setup installer (`packaging/windows/magpie.iss`, x64+ARM64 in one,
+  per-user, upgrades in place, keeps data on uninstall) and `install.ps1`.
+  The release job smoke-tests the installer, checks the zips' layout, and
+  runs the `install.ps1` one-liner under Windows PowerShell 5.1 against a
+  local mirror. `release.yml` skips Windows for `v0.1.*` tags. Unsigned for
+  now (Azure Trusted Signing later). An in-app update on Windows swaps
+  `magpie.exe` but leaves the version shown in Settings → Apps at the
+  installed one until the next installer run.
 - **Later, not started:** publishing to AUR (`magpie-finance` and a
   `-bin`) and a Homebrew tap (`ahaan-shah/homebrew-tap`), with CI bumping
   them per release; Apple notarization (needs a Developer account); code

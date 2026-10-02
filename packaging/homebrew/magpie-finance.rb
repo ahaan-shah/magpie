@@ -3,7 +3,7 @@
 #   brew install --cask ahaan-shah/tap/magpie-finance
 # After each release, bump `version` and `sha256` (from SHA256SUMS, the .zip line).
 cask "magpie-finance" do
-  version "0.1.6"
+  version "0.2.0"
   sha256 "REPLACE_WITH_SHA256_OF_Magpie-macos-universal.zip"
 
   url "https://github.com/ahaan-shah/magpie/releases/download/v#{version}/Magpie-macos-universal.zip"

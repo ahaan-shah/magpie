@@ -4,6 +4,29 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-10-02
+
+Magpie now runs on Windows. Everything in 0.1.6 is here, on all three
+platforms.
+
+### Added
+- Windows 10 (1809+) and 11, on x64 and ARM64. Install with one line in
+  PowerShell (`irm https://raw.githubusercontent.com/ahaan-shah/magpie/main/install.ps1 | iex`),
+  or download `Magpie-windows-setup.exe` or a portable zip from the release.
+  The installer sets Magpie up just for you with no admin prompt, adds it to
+  the Start menu, upgrades in place, and keeps your data when you uninstall.
+- On Windows, Magpie draws with OpenGL and switches to Direct3D by itself on
+  PCs where OpenGL can't start (virtual machines, remote desktop, some older
+  laptops).
+- In-app updates work on Windows too.
+
+### Fixed
+- Restart after an in-app update now reopens Magpie on Linux. It used to
+  just close it.
+- In-app updates unpack Windows downloads themselves, so a different `tar`
+  on the PATH (from Git, say) can't break them, and retry briefly if
+  antivirus is still scanning the new version.
+
 ## [0.1.6] - 2026-10-02
 
 ### Added

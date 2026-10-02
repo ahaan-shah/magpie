@@ -25,7 +25,7 @@ egui = "0.36.2"
 egui-phosphor = "0.14.0"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
 jiff = "0.2.37"
-magpie-core = { version = "0.1.6", path = "../core" }
+magpie-core = { version = "0.2.0", path = "../core" }
 pollster = "1.0.1"
 rfd = "0.17.2"
 serde = { version = "1.0.229", features = ["derive"] }
