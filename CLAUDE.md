@@ -27,7 +27,7 @@ Repo: github.com/ahaan-shah/magpie. Name on crates/AUR/Homebrew is
 
 The bar the maintainer set, and holds every change to: **blazingly fast,
 beautiful, light on RAM, fluid animations, robust (it must never crash),
-easy to install on Linux and macOS** (Windows is coming as 0.2.0).
+easy to install on Linux, macOS and Windows**.
 
 ## How the maintainer works (read this twice)
 
@@ -37,9 +37,8 @@ easy to install on Linux and macOS** (Windows is coming as 0.2.0).
 - **They test before you release.** Build it, install it locally (see
   `CLAUDE.local.md`), let them try it, iterate, *then* tag. CI release builds
   are slow, so don't use them as the test loop.
-- **Versions:** 0.1.x patch releases for features and fixes; they name the
-  version ("ship this as 0.1.7"). 0.2.0 is reserved for the Windows release
-  and is **on hold** until they say; they have more to add to it.
+- **Versions:** patch releases for features and fixes; they name the
+  version ("ship this as 0.2.1").
 - **Never touch their real data.** It lives in `~/.local/share/magpie/`. Test
   with `--demo`, `--data-dir`, or the test launchers. Back up the database
   (`sqlite3 … ".backup …"`) before anything that could migrate it. Don't close
@@ -202,18 +201,16 @@ from the README until they're actually published. The PKGBUILD and cask in
 
 ## Where things stand
 
-- **Released:** up to v0.1.6 (0.1.5 was folded into 0.1.6). The repo was
-  private until 0.1.6, then made public.
-- **Windows (0.2.0):** prepared on `agent/release-0.2.0` (version bump,
-  CHANGELOG, README Windows section); tagging waits for the maintainer.
-  Inno Setup installer (`packaging/windows/magpie.iss`, x64+ARM64 in one,
-  per-user, upgrades in place, keeps data on uninstall) and `install.ps1`.
-  The release job smoke-tests the installer, checks the zips' layout, and
-  runs the `install.ps1` one-liner under Windows PowerShell 5.1 against a
-  local mirror. `release.yml` skips Windows for `v0.1.*` tags. Unsigned for
-  now (Azure Trusted Signing later). An in-app update on Windows swaps
-  `magpie.exe` but leaves the version shown in Settings → Apps at the
-  installed one until the next installer run.
+- **Released:** up to v0.2.0, the first release with Windows (0.1.5 was
+  folded into 0.1.6). The repo was private until 0.1.6, then made public.
+- **Windows:** Inno Setup installer (`packaging/windows/magpie.iss`,
+  x64+ARM64 in one, per-user, upgrades in place, keeps data on uninstall)
+  and `install.ps1`. The release job smoke-tests the installer, checks the
+  zips' layout, and runs the `install.ps1` one-liner under Windows
+  PowerShell 5.1 against a local mirror. Unsigned for now (Azure Trusted
+  Signing later). An in-app update on Windows swaps `magpie.exe` but leaves
+  the version shown in Settings → Apps at the installed one until the next
+  installer run.
 - **Later, not started:** publishing to AUR (`magpie-finance` and a
   `-bin`) and a Homebrew tap (`ahaan-shah/homebrew-tap`), with CI bumping
   them per release; Apple notarization (needs a Developer account); code
