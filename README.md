@@ -149,8 +149,8 @@ Everything stays on your computer. There's no account and no telemetry. Magpie o
 
 | | Linux | macOS | Windows |
 |---|---|---|---|
-| Database & receipts | `~/.local/share/magpie/` | `~/Library/Application Support/dev.magpie.magpie/` | `%APPDATA%\magpie\magpie\data\` |
-| Exports | `~/Downloads` | `~/Downloads` | `Downloads` |
+| Database & receipts | `~/.local/share/magpie/` | `~/Library/Application Support/dev.magpie.magpie/` | `%APPDATA%\magpie\magpie\data\` (e.g. `C:\Users\you\AppData\Roaming\magpie\magpie\data\`) |
+| Exports | `~/Downloads` | `~/Downloads` | `%USERPROFILE%\Downloads` (e.g. `C:\Users\you\Downloads`) |
 
 The database is a single SQLite file, `magpie.db`. Back it up from Settings, or just copy it.
 
@@ -166,7 +166,7 @@ Measured on Arch Linux (Hyprland, NVIDIA):
 |---|---|
 | Launch to first frame | ~115 ms |
 | Idle CPU | 0% |
-| App memory (private) | ~28 MB, plus the GPU driver's shared libraries |
+| Memory (RAM) | Under 150 MB |
 | Load 100,000 transactions from disk | ~125 ms |
 | Dashboard aggregates over 100k transactions | ~7 ms (recomputed only when data changes) |
 | Release binary | ~16 MB, no runtime dependencies beyond system GL |
