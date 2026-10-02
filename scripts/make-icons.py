@@ -5,7 +5,8 @@ packaging/linux/magpie.svg is the icon everywhere on Linux. It's a vector, so
 it's sharp at any size and any display scale: the tile is a true superellipse
 (n = 5) written as smooth cubic Béziers. magpie-16.svg and magpie-24.svg are
 hinted variants for tiny sizes. Only two rasters are made, both with resvg (or
-rsvg-convert): icon-1024.png for the macOS .icns, and the window icon.
+rsvg-convert): icon-1024.png for the macOS .icns, and the window icon. The
+Windows magpie.ico holds every size rendered separately (needs ImageMagick).
 
     python3 scripts/make-icons.py
 """
@@ -14,6 +15,7 @@ import math
 import pathlib
 import shutil
 import subprocess
+import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "packaging" / "linux"
@@ -124,7 +126,21 @@ def main():
         old.unlink()
     render(str(src), str(OUT / "icon-1024.png"), 1024)
     render(str(src), str(ROOT / "crates" / "app" / "assets" / "icon-512.png"), 512)
-    print(f"wrote {src.relative_to(ROOT)}, magpie-24.svg, magpie-16.svg and the raster icons")
+    # Windows .ico: each size rendered on its own (hinted variants at 16/24)
+    # so Explorer, the taskbar and Start never scale a bitmap.
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    layers = []
+    for size in (16, 20, 24, 32, 40, 48, 64, 96, 128, 256):
+        small = 2 if size <= 20 else 1 if size <= 32 else 0
+        svg_path = tmp / f"m{size}.svg"
+        svg_path.write_text(svg(small))
+        png = tmp / f"m{size}.png"
+        render(str(svg_path), str(png), size)
+        layers.append(str(png))
+    ico = ROOT / "crates" / "app" / "assets" / "magpie.ico"
+    subprocess.run(["magick", *layers, str(ico)], check=True)
+    shutil.rmtree(tmp)
+    print(f"wrote {src.relative_to(ROOT)}, magpie-24.svg, magpie-16.svg, magpie.ico and the raster icons")
 
 
 if __name__ == "__main__":

@@ -70,6 +70,10 @@ OPTIONS:
 
 fn main() -> eframe::Result<()> {
     STARTED.get_or_init(Instant::now);
+    #[cfg(windows)]
+    if std::env::args().len() > 1 {
+        attach_console();
+    }
     let mut args = std::env::args().skip(1);
     let mut data_dir: Option<PathBuf> = None;
     let mut demo: Option<usize> = None;
@@ -95,14 +99,26 @@ fn main() -> eframe::Result<()> {
         demo = Some(n);
     }
 
+    // A custom or demo workspace keeps its window and UI state with it, so
+    // a test instance never touches the real app's saved state.
+    let separate = data_dir.is_some() || demo.is_some();
     let dir = data_dir.unwrap_or_else(magpie_core::data_dir);
     diag::init(&dir);
+    let demo_dir = std::env::temp_dir().join("magpie-demo");
+    let state_dir = separate.then(|| if demo.is_some() { demo_dir.clone() } else { dir.clone() });
     let store = if let Some(extra) = demo {
-        let demo_dir = std::env::temp_dir().join("magpie-demo");
         let _ = std::fs::remove_dir_all(&demo_dir);
-        let mut s = Store::open(&demo_dir).expect("open demo database");
+        let mut s = match Store::open(&demo_dir) {
+            Ok(s) => s,
+            Err(e) => fatal(&format!(
+                "Couldn't create the demo workspace in {}:\n{e}",
+                demo_dir.display()
+            )),
+        };
         let started = std::time::Instant::now();
-        magpie_core::demo::generate(&mut s, magpie_core::Cur::USD, 24, extra).expect("generate demo data");
+        if let Err(e) = magpie_core::demo::generate(&mut s, magpie_core::Cur::USD, 24, extra) {
+            fatal(&format!("Couldn't generate demo data:\n{e}"));
+        }
         eprintln!(
             "magpie: demo workspace with {} transactions ({:.0?})",
             s.txns().len(),
@@ -112,12 +128,16 @@ fn main() -> eframe::Result<()> {
     } else {
         match Store::open(&dir) {
             Ok(s) => s,
-            Err(e) => {
-                eprintln!("magpie: couldn't open {}: {e}", dir.display());
-                std::process::exit(1);
-            }
+            Err(e) => fatal(&format!(
+                "Couldn't open your Magpie data in {}:\n{e}\n\nYour data hasn't been changed.",
+                dir.display()
+            )),
         }
     };
+    // If a renderer fails to start and we retry with another, the first
+    // attempt may already have taken the store; reopen it from disk then.
+    let store_dir = if demo.is_some() { demo_dir.clone() } else { dir.clone() };
+    let slot = std::rc::Rc::new(std::cell::RefCell::new(Some(store)));
 
     let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon-512.png")).unwrap_or_default();
     let options = eframe::NativeOptions {
@@ -138,13 +158,106 @@ fn main() -> eframe::Result<()> {
         },
         centered: true,
         persist_window: true,
+        persistence_path: state_dir,
         ..Default::default()
     };
-    eframe::run_native(
-        "magpie",
-        options,
-        Box::new(move |cc| Ok(Box::new(app::App::new(cc, store)))),
-    )
+    let run = |options: eframe::NativeOptions| {
+        let slot = slot.clone();
+        let store_dir = store_dir.clone();
+        eframe::run_native(
+            "magpie",
+            options,
+            Box::new(move |cc| {
+                let store = match slot.borrow_mut().take() {
+                    Some(s) => s,
+                    None => Store::open(&store_dir)?,
+                };
+                Ok(Box::new(app::App::new(cc, store)))
+            }),
+        )
+    };
+    let result = run_with_fallback(options, run);
+    if let Err(e) = &result {
+        fatal(&format!(
+            "Magpie couldn't open its window:\n{e}\n\nThis usually means the graphics driver is missing or out of date."
+        ));
+    }
+    result
+}
+
+/// Starts the UI. On Windows, OpenGL comes first (lightest), and if it can't
+/// start (no usable driver: VMs, remote desktop, some older machines) Magpie
+/// retries with Direct3D 12, which always has a software fallback.
+/// `MAGPIE_RENDERER=glow|wgpu` forces one.
+#[cfg(windows)]
+fn run_with_fallback(
+    options: eframe::NativeOptions,
+    run: impl Fn(eframe::NativeOptions) -> eframe::Result<()>,
+) -> eframe::Result<()> {
+    use eframe::Renderer;
+    let wgpu_options = |mut o: eframe::NativeOptions| {
+        o.renderer = Renderer::Wgpu;
+        o.wgpu_options.surface.present_mode = eframe::wgpu::PresentMode::AutoNoVsync;
+        o
+    };
+    match std::env::var("MAGPIE_RENDERER").ok().as_deref() {
+        Some("wgpu") => return run(wgpu_options(options)),
+        Some("glow") => {
+            let mut o = options;
+            o.renderer = Renderer::Glow;
+            return run(o);
+        }
+        _ => {}
+    }
+    let mut glow = options.clone();
+    glow.renderer = Renderer::Glow;
+    match run(glow) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            diag::note(
+                "RENDERER",
+                &format!("OpenGL failed to start ({e}); retrying with Direct3D"),
+            );
+            run(wgpu_options(options))
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn run_with_fallback(
+    options: eframe::NativeOptions,
+    run: impl Fn(eframe::NativeOptions) -> eframe::Result<()>,
+) -> eframe::Result<()> {
+    run(options)
+}
+
+/// Reports an error that stops Magpie from starting, in a dialog as well as
+/// on stderr (a Windows app has no console to print to), then exits.
+fn fatal(msg: &str) -> ! {
+    diag::note("COULDN'T START", msg);
+    if !app::headless() {
+        let log = diag::log_path()
+            .map(|p| format!("\n\nDetails are in {}", p.display()))
+            .unwrap_or_default();
+        let _ = rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Error)
+            .set_title("Magpie couldn't start")
+            .set_description(format!("{msg}{log}"))
+            .set_buttons(rfd::MessageButtons::Ok)
+            .show();
+    }
+    std::process::exit(1);
+}
+
+/// A Windows GUI app has no console, so `magpie --version` from a terminal
+/// would print nothing. Attach to the terminal it was started from, if any.
+#[cfg(windows)]
+fn attach_console() {
+    // SAFETY: plain Win32 call with no pointers; failing (no parent console)
+    // is harmless.
+    unsafe {
+        windows_sys::Win32::System::Console::AttachConsole(windows_sys::Win32::System::Console::ATTACH_PARENT_PROCESS);
+    }
 }
 
 #[cfg(test)]

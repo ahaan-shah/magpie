@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -33,3 +33,14 @@ jobs:
       - name: Shellcheck installer
         if: runner.os == 'Linux'
         run: shellcheck -S warning install.sh scripts/*.sh
+      - name: Parse PowerShell scripts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bad = 0
+          foreach ($f in @('install.ps1') + (Get-ChildItem scripts -Filter *.ps1).FullName) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $f), [ref]$null, [ref]$errors) | Out-Null
+            if ($errors) { $bad++; $errors | ForEach-Object { Write-Host "${f}: $_" } }
+          }
+          if ($bad) { exit 1 }

@@ -45,8 +45,13 @@ fn write_report(title: &str, detail: &str) {
         .lock()
         .map(|c| c.iter().cloned().collect::<Vec<_>>().join("\n"))
         .unwrap_or_default();
+    let crumbs = if crumbs.is_empty() {
+        String::new()
+    } else {
+        format!("Recent actions:\n{crumbs}\n")
+    };
     let report = format!(
-        "==== {title} · magpie {} · {} ====\n{detail}\nRecent actions:\n{crumbs}\n\n",
+        "==== {title} · magpie {} · {} ====\n{detail}\n{crumbs}\n",
         env!("CARGO_PKG_VERSION"),
         jiff::Zoned::now().strftime("%Y-%m-%d %H:%M:%S")
     );
@@ -56,6 +61,15 @@ fn write_report(title: &str, detail: &str) {
     {
         let _ = f.write_all(report.as_bytes());
     }
+}
+
+/// Writes a one-off entry (like which renderer started) to the log.
+pub fn note(title: &str, detail: &str) {
+    write_report(title, detail);
+}
+
+pub fn log_path() -> Option<PathBuf> {
+    LOG.get().cloned()
 }
 
 /// Installs the panic hook and starts the stall watchdog.

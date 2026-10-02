@@ -13,6 +13,8 @@ repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
 
+build = "build.rs"
+
 [[bin]]
 name = "magpie"
 path = "src/main.rs"
@@ -27,6 +29,16 @@ magpie-core = { version = "0.1.4", path = "../core" }
 pollster = "1.0.1"
 rfd = "0.17.2"
 serde = { version = "1.0.229", features = ["derive"] }
+
+# Windows: glow (OpenGL) first, with wgpu (Direct3D 12, including its software
+# rasterizer) as the fallback for machines without a usable OpenGL driver:
+# VMs, remote desktop, some older laptops.
+[target.'cfg(windows)'.dependencies]
+eframe = { version = "0.36.2", default-features = false, features = ["glow", "wgpu", "default_fonts", "persistence"] }
+windows-sys = { version = "0.61", features = ["Win32_System_Console"] }
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
 
 [dev-dependencies]
 egui_kittest = { version = "0.36", features = ["wgpu", "snapshot"] }

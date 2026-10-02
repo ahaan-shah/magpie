@@ -2,6 +2,8 @@ name: Release
 
 # Push a tag like v0.1.0 to build and publish a release:
 #   git tag v0.1.0 && git push origin v0.1.0
+# Running it by hand (workflow_dispatch) builds and tests everything,
+# including the Windows installer smoke test, without publishing.
 on:
   push:
     tags: ["v*"]
@@ -56,18 +58,62 @@ jobs:
             dist/Magpie-macos-universal.dmg
             dist/Magpie-macos-universal.zip
 
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --no-progress -y
+          }
+      - name: Build zips and installer
+        shell: pwsh
+        run: ./scripts/package-windows.ps1 "${{ github.ref_name }}"
+      - name: Smoke test (install, run, screenshot every page, uninstall)
+        shell: pwsh
+        run: ./scripts/smoke-windows.ps1 dist/Magpie-windows-setup.exe windows-screenshots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-screenshots
+          path: windows-screenshots
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            dist/Magpie-windows-setup.exe
+            dist/Magpie-windows-x64.zip
+            dist/Magpie-windows-arm64.zip
+
   publish:
-    needs: [linux, macos]
+    needs: [linux, macos, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: linux-*
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos
+          path: artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: artifacts
       - name: Checksums
         run: |
-          cp install.sh artifacts/
+          cp install.sh install.ps1 artifacts/
           cd artifacts && sha256sum * > SHA256SUMS && cat SHA256SUMS
       - name: Release notes from CHANGELOG
         run: |

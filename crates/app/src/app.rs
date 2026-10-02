@@ -1055,7 +1055,11 @@ pub fn open_external(path: &std::path::Path) {
     }
     #[cfg(target_os = "macos")]
     let cmd = "open";
-    #[cfg(not(target_os = "macos"))]
+    // Explorer opens files with their default app and folders in a window,
+    // and copes with spaces and unicode in paths (unlike `cmd /c start`).
+    #[cfg(windows)]
+    let cmd = "explorer";
+    #[cfg(not(any(target_os = "macos", windows)))]
     let cmd = "xdg-open";
     if let Err(e) = std::process::Command::new(cmd).arg(path).spawn() {
         crate::diag::crumb(format!("couldn't run {cmd}: {e}"));

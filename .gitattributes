@@ -1,0 +1,2 @@
+# Keep LF everywhere (Windows CI checks out with autocrlf otherwise).
+* text=auto eol=lf
