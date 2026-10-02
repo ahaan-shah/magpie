@@ -632,96 +632,102 @@ impl App {
                     if nav_item(ui, &t, Page::Settings, self.page == Page::Settings, k, item_h).clicked() {
                         self.go(&ctx, Page::Settings);
                     }
+                    // Just above Settings, where an update naturally lives.
+                    if self.updater.prompt() {
+                        self.update_prompt(ui, &t, k);
+                    }
                     if k < 0.3 {
                         ui.add_space(8.0);
                         self.net_worth_card(ui, &t, 1.0 - k / 0.3);
-                    }
-                    if self.updater.prompt() {
-                        ui.add_space(8.0);
-                        self.update_prompt(ui, &t, k > 0.5);
                     }
                 });
             });
     }
 
-    /// The sidebar's update / restart prompt. Nothing here happens without a
-    /// click: the launch check only makes it appear.
-    fn update_prompt(&mut self, ui: &mut Ui, t: &Theme, compact: bool) {
+    /// The sidebar's update / restart prompt: a quiet row in the style of
+    /// the nav items, with a small accent dot. Nothing happens without a
+    /// click; the launch check only makes it appear.
+    fn update_prompt(&mut self, ui: &mut Ui, t: &Theme, collapse: f32) {
         use crate::updater::Phase;
         let ctx = ui.ctx().clone();
         let phase = self.updater.phase.clone();
-        let appear = motion::appear(&ctx, 0.0, 0.0, 0.3);
-        if compact {
-            let (glyph, tip) = match &phase {
-                Phase::Available(r) => (ph::ARROW_CIRCLE_UP, format!("Update to Magpie {}", r.version)),
-                Phase::Manual(r, _) => (ph::ARROW_CIRCLE_UP, format!("Magpie {} is available", r.version)),
-                Phase::Installing(_) => (ph::CIRCLE_NOTCH, "Updating…".to_string()),
-                _ => (ph::ARROWS_CLOCKWISE, "Restart to finish updating".to_string()),
-            };
-            let full = ui.max_rect();
-            let (strip, _) = ui.allocate_exact_size(vec2(full.width(), 34.0), Sense::hover());
-            let r = Rect::from_center_size(strip.center(), vec2(34.0, 34.0));
-            ui.painter()
-                .rect_filled(r, CornerRadius::same(10), motion::with_alpha(t.accent, 0.16 * appear));
-            let resp = ui
-                .scope_builder(egui::UiBuilder::new().max_rect(r), |ui| {
-                    widgets::icon_button(ui, t, glyph, &tip)
-                })
-                .inner;
-            if resp.clicked() {
-                self.update_action(&ctx);
-            }
-            return;
+        let (label, tip) = match &phase {
+            Phase::Available(r) => (
+                "Update available".to_string(),
+                format!("Magpie {} is out. Click to update.", r.version),
+            ),
+            Phase::Manual(r, why) => (
+                "Update available".to_string(),
+                format!("Magpie {} is out. {why}.", r.version),
+            ),
+            Phase::Installing(r) => (
+                format!("Updating… {:.0}%", self.updater.progress * 100.0),
+                format!("Installing Magpie {}", r.version),
+            ),
+            Phase::Ready(r) => (
+                "Restart to update".to_string(),
+                format!("Magpie {} is installed. Click to restart.", r.version),
+            ),
+            _ => return,
+        };
+        let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 34.0), Sense::click());
+        let resp = resp.on_hover_text(tip);
+        let installing = matches!(phase, Phase::Installing(_));
+        let hover = motion::toggle(
+            &ctx,
+            Id::new("update-row-h"),
+            resp.hovered() && !installing,
+            motion::MICRO,
+        );
+        let shown = motion::appear(&ctx, 0.0, 0.0, 0.4);
+        let p = ui.painter();
+        if hover > 0.0 {
+            p.rect_filled(rect, CornerRadius::same(10), motion::with_alpha(t.hover, hover));
         }
-        egui::Frame::new()
-            .fill(t.tint(t.accent, 0.10))
-            .stroke(Stroke::new(1.0, motion::with_alpha(t.accent, 0.35)))
-            .corner_radius(CornerRadius::same(12))
-            .inner_margin(egui::Margin::same(12))
-            .show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                let (title, sub) = match &phase {
-                    Phase::Available(r) | Phase::Manual(r, _) => ("Update available", format!("Magpie {}", r.version)),
-                    Phase::Installing(r) => ("Updating…", format!("Magpie {}", r.version)),
-                    Phase::Ready(r) => ("Update installed", format!("Restart to use {}", r.version)),
-                    _ => return,
-                };
-                ui.label(egui::RichText::new(title).font(theme::semibold(13.0)).color(t.text));
-                ui.label(egui::RichText::new(sub).font(theme::regular(11.5)).color(t.text2));
-                ui.add_space(6.0);
-                match &phase {
-                    Phase::Installing(_) => {
-                        let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 6.0), Sense::hover());
-                        widgets::paint_progress(
-                            ui,
-                            t,
-                            Id::new("update-progress"),
-                            r,
-                            self.updater.progress,
-                            None,
-                            t.accent,
-                        );
-                    }
-                    Phase::Manual(r, why) => {
-                        if widgets::secondary(ui, t, Some(ph::DOWNLOAD_SIMPLE), "Download")
-                            .on_hover_text(why)
-                            .clicked()
-                        {
-                            open_url(&r.page);
-                        }
-                    }
-                    Phase::Ready(_) => {
-                        if widgets::primary(ui, t, Some(ph::ARROWS_CLOCKWISE), "Restart").clicked() {
-                            self.update_action(&ctx);
-                        }
-                    }
-                    _ => {
-                        if widgets::primary(ui, t, Some(ph::ARROW_CIRCLE_UP), "Update").clicked() {
-                            self.update_action(&ctx);
-                        }
-                    }
-                }
-            });
+        let fg = motion::with_alpha(motion::lerp_color(t.text3, t.text, hover), shown);
+        let icon_x = motion::lerp(rect.left() + 14.0, rect.center().x - 8.0, collapse);
+        let icon_c = pos2(icon_x + 8.0, rect.center().y);
+        if installing {
+            let angle = ui.input(|i| i.time) as f32 * 5.5;
+            widgets::paint_circle_arrows(p, icon_c, 6.0, angle, motion::with_alpha(t.accent, shown), 1.5);
+            ctx.request_repaint();
+        } else {
+            let glyph = if matches!(phase, Phase::Ready(_)) {
+                ph::ARROW_CLOCKWISE
+            } else {
+                ph::CLOUD_ARROW_DOWN
+            };
+            p.text(icon_c, Align2::CENTER_CENTER, glyph, theme::regular(16.0), fg);
+            // The one bit of colour: a small dot on the icon.
+            p.circle_filled(icon_c + vec2(7.0, -6.0), 3.0, motion::with_alpha(t.accent, shown));
+        }
+        if collapse < 0.6 {
+            let a = (1.0 - collapse / 0.6) * shown;
+            p.text(
+                pos2(rect.left() + 44.0, rect.center().y),
+                Align2::LEFT_CENTER,
+                label,
+                theme::medium(12.5),
+                motion::with_alpha(fg, a),
+            );
+        }
+        if installing {
+            let bar = Rect::from_min_size(
+                pos2(rect.left() + 44.0, rect.bottom() - 4.0),
+                vec2(rect.width() - 56.0, 2.0),
+            );
+            if collapse < 0.6 {
+                p.rect_filled(bar, CornerRadius::same(1), t.border);
+                let done = Rect::from_min_size(bar.min, vec2(bar.width() * self.updater.progress, 2.0));
+                p.rect_filled(done, CornerRadius::same(1), t.accent);
+            }
+        }
+        if resp.clicked() {
+            self.update_action(&ctx);
+        }
+        if !installing {
+            resp.on_hover_cursor(egui::CursorIcon::PointingHand);
+        }
     }
 
     /// What clicking the update prompt does in its current state.

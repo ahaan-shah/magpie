@@ -83,11 +83,11 @@ fn main() -> eframe::Result<()> {
     while let Some(a) = args.next() {
         match a.as_str() {
             "-h" | "--help" => {
-                print!("{HELP}");
+                print_quietly(HELP);
                 return Ok(());
             }
             "--licenses" => {
-                print!("{}", include_str!("../../../THIRD-PARTY-LICENSES.txt"));
+                print_quietly(include_str!("../../../THIRD-PARTY-LICENSES.txt"));
                 return Ok(());
             }
             "-V" | "--version" => {
@@ -235,6 +235,12 @@ fn run_with_fallback(
     run: impl Fn(eframe::NativeOptions) -> eframe::Result<()>,
 ) -> eframe::Result<()> {
     run(options)
+}
+
+/// Prints to stdout, ignoring a closed pipe (`magpie --licenses | head`).
+fn print_quietly(text: &str) {
+    use std::io::Write;
+    let _ = std::io::stdout().lock().write_all(text.as_bytes());
 }
 
 /// Reports an error that stops Magpie from starting, in a dialog as well as

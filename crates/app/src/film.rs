@@ -834,6 +834,34 @@ fn stills() {
         img.save(&path).expect("save");
         eprintln!("stills: wrote {path}");
 
+        // The sidebar's update prompt.
+        step(
+            &mut app,
+            vec![Event::Key {
+                key: egui::Key::Escape,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::NONE,
+            }],
+            t + 0.02,
+        );
+        app.modal = None;
+        app.updater.phase = crate::updater::Phase::Available(magpie_core::update::Release {
+            version: "0.1.7".into(),
+            page: String::new(),
+            notes: String::new(),
+            assets: Vec::new(),
+        });
+        let mut last = None;
+        for _ in 0..40 {
+            t += 1.0 / 60.0;
+            last = Some(step(&mut app, vec![Event::PointerMoved(pos2(900.0, 400.0))], t).0);
+        }
+        let path = format!("{out}/update-{}.png", theme.to_lowercase());
+        last.expect("frame").save(&path).expect("save");
+        eprintln!("stills: wrote {path}");
+
         // First run: a brand-new, empty workspace shows onboarding.
         let dir = std::env::temp_dir().join(format!("magpie-stills-new-{theme}"));
         let _ = std::fs::remove_dir_all(&dir);

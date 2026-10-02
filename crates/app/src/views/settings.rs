@@ -446,7 +446,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         use crate::updater::Phase;
         ui.horizontal(|ui| match &update_phase {
             Phase::Available(r) => {
-                if w::primary(ui, &t, Some(ph::ARROW_CIRCLE_UP), &format!("Update to {}", r.version)).clicked() {
+                if w::primary(ui, &t, Some(ph::CLOUD_ARROW_DOWN), &format!("Update to {}", r.version)).clicked() {
                     acts.push(Act::UpdateAction);
                 }
                 ui.label(
@@ -484,7 +484,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 );
             }
             Phase::Ready(r) => {
-                if w::primary(ui, &t, Some(ph::ARROWS_CLOCKWISE), "Restart Magpie").clicked() {
+                if w::primary(ui, &t, Some(ph::ARROW_CLOCKWISE), "Restart Magpie").clicked() {
                     acts.push(Act::UpdateAction);
                 }
                 ui.label(w::subtle(
