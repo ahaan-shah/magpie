@@ -104,6 +104,15 @@ To pin a version, set `MAGPIE_VERSION=0.2.0`.
 
 The app isn't notarized yet. If macOS refuses to open it the first time, right-click the app and choose **Open**, or run `xattr -dr com.apple.quarantine /Applications/Magpie.app`.
 
+To uninstall on macOS, drag **Magpie** from Applications to the Trash. On Linux, run:
+
+```bash
+rm -f ~/.local/bin/magpie ~/.local/share/applications/magpie.desktop \
+  ~/.local/share/icons/hicolor/{scalable,16x16,24x24}/apps/magpie.svg
+```
+
+Your data is kept. To remove it too, delete the data folder listed under [Your data](#your-data).
+
 ### Windows (one line)
 
 In PowerShell:
