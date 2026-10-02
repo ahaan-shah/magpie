@@ -720,7 +720,7 @@ fn filter_actions(ui: &mut Ui, t: &Theme, st: &mut State, acts: &mut Vec<Act>) {
         st.cat = CatFilter::Any;
         st.kind = 0;
     }
-    if w::icon_button(ui, t, ph::UPLOAD_SIMPLE, "Import a bank CSV").clicked() {
+    if w::icon_button(ui, t, ph::UPLOAD_SIMPLE, "Import a bank statement (CSV, Excel, OFX)").clicked() {
         acts.push(Act::ImportCsv);
     }
     if w::icon_button(ui, t, ph::DOWNLOAD_SIMPLE, "Export these transactions (CSV)").clicked() {
@@ -747,7 +747,7 @@ fn table(app: &mut App, ui: &mut Ui, t: &Theme, rows: &Rows, acts: &mut Vec<Act>
         let (title, body) = if app.store.txns().is_empty() {
             (
                 "No transactions yet",
-                "Type one into quick add above, or import a CSV from your bank.",
+                "Type one into quick add above, or import a statement from your bank.",
             )
         } else {
             ("Nothing matches", "Try a different search or clear the filters.")
@@ -1469,7 +1469,7 @@ fn apply(app: &mut App, ctx: &egui::Context, acts: Vec<Act>) {
                     ctx,
                     crate::dialogs::Purpose::ImportCsv,
                     "Import transactions",
-                    ("CSV", &["csv"]),
+                    ("Bank statements", magpie_core::statement::EXTENSIONS),
                 );
             }
             Act::Export => {

@@ -833,5 +833,35 @@ fn stills() {
         let path = format!("{out}/dropdown-{}.png", theme.to_lowercase());
         img.save(&path).expect("save");
         eprintln!("stills: wrote {path}");
+
+        // First run: a brand-new, empty workspace shows onboarding.
+        let dir = std::env::temp_dir().join(format!("magpie-stills-new-{theme}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut store = magpie_core::Store::open(&dir).expect("store");
+        store.update_settings(|s| s.theme = theme.into()).expect("theme");
+        let ctx = Context::default();
+        let mut app = App::with_context(&ctx, None, store);
+        let mut renderer = WgpuTestRenderer::new();
+        let mut img = None;
+        for i in 0..90 {
+            let mut raw = RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
+                time: Some(i as f64 / 60.0),
+                ..Default::default()
+            };
+            raw.viewports.insert(
+                ViewportId::ROOT,
+                ViewportInfo {
+                    native_pixels_per_point: Some(ppp),
+                    ..Default::default()
+                },
+            );
+            let mut output = ctx.run_ui(raw, |ui| app.frame(ui));
+            renderer.handle_delta(&mut output.textures_delta);
+            img = Some(renderer.render(&ctx, &output).expect("render"));
+        }
+        let path = format!("{out}/onboarding-{}.png", theme.to_lowercase());
+        img.expect("frame").save(&path).expect("save");
+        eprintln!("stills: wrote {path}");
     }
 }

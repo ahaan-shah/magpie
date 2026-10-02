@@ -13,6 +13,7 @@ pub mod money;
 pub mod quick;
 pub mod receipts;
 pub mod recurring;
+pub mod statement;
 pub mod store;
 
 pub use model::*;

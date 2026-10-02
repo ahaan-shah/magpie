@@ -22,11 +22,11 @@ in a native app that opens instantly and sits at 0% CPU when idle.
 **Transactions.**
 - **Natural-language quick add.** Type `coffee 4.50 @Blue Bottle #treats yesterday` and Magpie works out the amount, payee, tags and date. It fills in the category from your history.
 - **Fast, virtualized ledger.** It stays smooth with 100k+ transactions. Rows are grouped by day, with daily totals.
+- **Import your bank's statements.** CSV, Excel or OFX, straight from your bank: Magpie finds the columns itself, and skips anything already imported.
 - **Search and filters.** Search payee, note, `#tag` or amount, and filter by date range, account, category or type.
 - **Multi-select.** Ctrl/Shift-click to recategorize, mark as cleared or delete in bulk.
 - **Undo / redo** for every change.
 - **Receipts.** Drop a photo or PDF onto a transaction.
-- **CSV import** from any bank, with automatic column detection.
 
 <img src="docs/screenshots/transactions.png" alt="Transactions with quick add" width="900">
 
@@ -100,7 +100,7 @@ What the script does on each platform:
 - **Linux:** installs `magpie` into `~/.local/bin`, and adds a desktop entry and icon so Magpie shows up in your app launcher.
 - **macOS:** installs `Magpie.app` (universal, Apple Silicon + Intel) into `/Applications`.
 
-To pin a version, set `MAGPIE_VERSION=0.1.4`.
+To pin a version, set `MAGPIE_VERSION=0.1.5`.
 
 The app isn't notarized yet. If macOS refuses to open it the first time, right-click the app and choose **Open**, or run `xattr -dr com.apple.quarantine /Applications/Magpie.app`.
 

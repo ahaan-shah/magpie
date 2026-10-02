@@ -1,5 +1,5 @@
-//! First-run welcome: pick a currency and a starting account, or explore
-//! with demo data, or bring data over from Pear.
+//! First-run welcome: pick a currency and a starting account, then start
+//! fresh, import a bank statement, or explore with demo data.
 
 use crate::app::App;
 use crate::forms::currency_picker;
@@ -16,17 +16,18 @@ pub struct State {
     name: String,
     balance: String,
     shown_at: Option<f64>,
-    pear: Option<std::path::PathBuf>,
 }
+
+/// Used when the account name is left blank.
+const DEFAULT_ACCOUNT: &str = "Current account";
 
 impl State {
     pub fn new() -> State {
         State {
             base: Cur::USD,
-            name: "Everyday".into(),
+            name: String::new(),
             balance: String::new(),
             shown_at: None,
-            pear: magpie_core::io::pear_path(),
         }
     }
 }
@@ -34,7 +35,7 @@ impl State {
 enum Choice {
     Fresh,
     Demo,
-    Pear,
+    Import,
 }
 
 pub fn show(app: &mut App, ui: &mut Ui) {
@@ -74,10 +75,25 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                                 .font(theme::display(28.0))
                                 .color(t.text),
                         );
-                        ui.label(w::subtle(
-                            &t,
-                            "A calm, fast home for your money. Everything stays on this computer.",
-                        ));
+                        ui.add_space(6.0);
+                        // "A calm nest for your money." with the nest in the
+                        // accent, then the promise underneath, quieter.
+                        let mut job = egui::text::LayoutJob::default();
+                        let part = |font: egui::FontId, color| egui::TextFormat {
+                            font_id: font,
+                            color,
+                            ..Default::default()
+                        };
+                        job.append("A calm ", 0.0, part(theme::regular(17.0), t.text2));
+                        job.append("nest", 0.0, part(theme::semibold(17.0), t.accent));
+                        job.append(" for your money.", 0.0, part(theme::regular(17.0), t.text2));
+                        ui.label(job);
+                        ui.add_space(2.0);
+                        ui.label(
+                            egui::RichText::new("All your data, on your computer.")
+                                .font(theme::regular(13.5))
+                                .color(t.text3),
+                        );
                     });
                     ui.add_space(22.0);
                     let wd = ui.available_width();
@@ -85,13 +101,13 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     currency_picker(ui, "onb-cur", &mut st.base, wd);
                     ui.add_space(10.0);
                     w::field_label(ui, &t, "First account");
-                    w::text_field(ui, &t, Id::new("onb-name"), &mut st.name, "Everyday", wd);
+                    w::text_field(ui, &t, Id::new("onb-name"), &mut st.name, DEFAULT_ACCOUNT, wd);
                     ui.add_space(10.0);
-                    w::field_label(ui, &t, "Current balance");
+                    w::field_label(ui, &t, "Balance today");
                     w::text_field(ui, &t, Id::new("onb-bal"), &mut st.balance, "0.00", wd);
                     ui.add_space(20.0);
                     ui.vertical_centered_justified(|ui| {
-                        if w::primary(ui, &t, Some(ph::ARROW_RIGHT), "Get started").clicked() {
+                        if w::primary(ui, &t, None, "Get started").clicked() {
                             choice = Some(Choice::Fresh);
                         }
                     });
@@ -100,13 +116,14 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                         if w::ghost(ui, &t, Some(ph::SPARKLE), "Explore with demo data").clicked() {
                             choice = Some(Choice::Demo);
                         }
-                        if st.pear.is_some() {
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if w::ghost(ui, &t, Some(ph::UPLOAD_SIMPLE), "Import from Pear").clicked() {
-                                    choice = Some(Choice::Pear);
-                                }
-                            });
-                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if w::ghost(ui, &t, Some(ph::UPLOAD_SIMPLE), "Import data")
+                                .on_hover_text("A statement from your bank: CSV, Excel or OFX")
+                                .clicked()
+                            {
+                                choice = Some(Choice::Import);
+                            }
+                        });
                     });
                 });
         });
@@ -120,12 +137,12 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 demo::generate(&mut app.store, base, 24, 0)?;
                 Ok("Demo data loaded — poke around!".into())
             }
-            Choice::Fresh | Choice::Pear => {
+            Choice::Fresh | Choice::Import => {
                 demo::seed_defaults(&mut app.store, base)?;
                 if let Some(first) = app.store.accounts().first().cloned() {
                     let mut a = first;
                     a.name = if st.name.trim().is_empty() {
-                        "Everyday".into()
+                        DEFAULT_ACCOUNT.into()
                     } else {
                         st.name.trim().into()
                     };
@@ -135,10 +152,17 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     app.store.save_account(a)?;
                 }
                 app.store.update_settings(|s| s.onboarded = true)?;
-                if let (Choice::Pear, Some(path)) = (choice, st.pear.as_ref()) {
-                    let acc = app.store.accounts()[0].id;
-                    let n = magpie_core::io::import_pear(&mut app.store, path, acc)?;
-                    return Ok(format!("Imported {n} transactions from Pear"));
+                if let Choice::Import = choice {
+                    let balance = (!st.balance.trim().is_empty())
+                        .then(|| money::parse(&st.balance, base))
+                        .flatten();
+                    app.dialogs.pick(
+                        &ctx,
+                        crate::dialogs::Purpose::ImportFirst(balance),
+                        "Import a bank statement",
+                        ("Bank statements", magpie_core::statement::EXTENSIONS),
+                    );
+                    return Ok("Pick a statement from your bank to bring your history in".into());
                 }
                 Ok(concat!(
                     "You're all set. Press ",

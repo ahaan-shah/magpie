@@ -1483,11 +1483,15 @@ pub struct ImportForm {
     map: CsvMapping,
     account: RowId,
     error: Option<String>,
+    /// From onboarding: the balance the person said the account has today.
+    /// After importing, the opening balance is adjusted so the account still
+    /// shows exactly that.
+    pub balance_today: Option<i64>,
 }
 
 impl ImportForm {
     pub fn open(store: &Store, path: PathBuf) -> magpie_core::Result<ImportForm> {
-        let preview = magpie_core::io::preview_csv(&path)?;
+        let preview = magpie_core::statement::preview(&path)?;
         let map = preview.guess.clone();
         Ok(ImportForm {
             path,
@@ -1495,6 +1499,7 @@ impl ImportForm {
             map,
             account: store.default_account().unwrap_or(0),
             error: None,
+            balance_today: None,
         })
     }
 
@@ -1513,14 +1518,14 @@ impl ImportForm {
             .path
             .file_name()
             .and_then(|n| n.to_str())
-            .unwrap_or("file.csv")
+            .unwrap_or("statement")
             .to_string();
         title(
             ui,
             t,
-            "Import CSV",
+            "Import transactions",
             &format!(
-                "{name} · {} rows found. Match the columns and pick an account.",
+                "{name} · {} rows found. Check the columns and pick an account.",
                 self.preview.rows.len()
             ),
         );
@@ -1601,14 +1606,7 @@ impl ImportForm {
                             |r: &Vec<String>, i: Option<usize>| i.and_then(|i| r.get(i)).cloned().unwrap_or_default();
                         for r in self.preview.rows.iter().take(6) {
                             let date = magpie_core::io::parse_date(&get(r, Some(self.map.date)), self.map.date_format);
-                            let amt = if self.map.amount.is_some() {
-                                money::parse(&get(r, self.map.amount), cur)
-                                    .map(|v| if self.map.invert { -v } else { v })
-                            } else {
-                                let d = money::parse(&get(r, self.map.debit), cur).unwrap_or(0).abs();
-                                let c = money::parse(&get(r, self.map.credit), cur).unwrap_or(0).abs();
-                                (d != 0 || c != 0).then_some(c - d)
-                            };
+                            let amt = magpie_core::statement::row_amount(r, &self.map, cur);
                             ui.label(match date {
                                 Some(d) => w::subtle(t, w::fmt_date(d)),
                                 None => egui::RichText::new("invalid").color(t.neg),
@@ -1633,19 +1631,33 @@ impl ImportForm {
         if !ok {
             return Outcome::Keep;
         }
-        match magpie_core::io::read_csv(&app.store, &self.path, &self.map, self.account) {
+        match magpie_core::statement::read(&app.store, &self.path, &self.map, self.account) {
             Ok(res) => {
-                let skipped = res.skipped;
+                let (skipped, dupes) = (res.skipped, res.duplicates);
                 if res.txns.is_empty() {
-                    self.error = Some("No rows could be read with this mapping".into());
+                    self.error = Some(if dupes > 0 {
+                        format!("All {dupes} transactions in this file are already in this account")
+                    } else {
+                        "No transactions could be read with these columns".into()
+                    });
                     return Outcome::Keep;
                 }
                 match magpie_core::io::commit_import(&mut app.store, res, &format!("Import {name}")) {
                     Ok(n) => {
-                        let extra = if skipped > 0 {
-                            format!(" ({skipped} skipped)")
-                        } else {
+                        if let Some(target) = self.balance_today {
+                            match_balance(&mut app.store, self.account, target);
+                        }
+                        let mut extra = Vec::new();
+                        if dupes > 0 {
+                            extra.push(format!("{dupes} already here"));
+                        }
+                        if skipped > 0 {
+                            extra.push(format!("{skipped} other rows skipped"));
+                        }
+                        let extra = if extra.is_empty() {
                             String::new()
+                        } else {
+                            format!(" ({})", extra.join(", "))
                         };
                         app.toasts.undoable(format!("Imported {n} transactions{extra}"));
                         Outcome::Close
@@ -1662,6 +1674,23 @@ impl ImportForm {
             }
         }
     }
+}
+
+/// Sets the account's opening balance so its balance today is `target`,
+/// after a statement brought in its history.
+fn match_balance(store: &mut Store, account: RowId, target: i64) {
+    let today = magpie_core::today();
+    let Some(mut acc) = store.account(account).cloned() else {
+        return;
+    };
+    let moved: i64 = store
+        .txns()
+        .iter()
+        .filter(|t| t.account == account && t.date <= today)
+        .map(|t| t.amount)
+        .sum();
+    acc.opening = target - moved;
+    let _ = store.save_account(acc);
 }
 
 // ============================================================= Confirm
@@ -1772,7 +1801,7 @@ pub const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
             (concat!(shortcut!("R")), "New recurring"),
             (concat!(shortcut!("G")), "New goal"),
             (concat!(shortcut!("Shift A")), "New account"),
-            (concat!(shortcut!("I")), "Import a CSV"),
+            (concat!(shortcut!("I")), "Import a bank statement"),
             (concat!(shortcut!("E")), "Export everything as CSV"),
         ],
     ),

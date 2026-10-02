@@ -13,8 +13,10 @@ rust-version.workspace = true
 
 [dependencies]
 blake3 = "1.8.7"
+calamine = "0.36.1"
 csv = "1.4.0"
 directories = "6.0.0"
+encoding_rs = "0.8.42"
 jiff = "0.2.37"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 rust_xlsxwriter = "0.99.1"

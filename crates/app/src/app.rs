@@ -312,6 +312,13 @@ impl App {
                     Ok(f) => self.open_modal(ctx, Modal::Import(Box::new(f))),
                     Err(e) => self.toasts.error(e.to_string()),
                 },
+                Purpose::ImportFirst(balance) => match forms::ImportForm::open(&self.store, path) {
+                    Ok(mut f) => {
+                        f.balance_today = balance;
+                        self.open_modal(ctx, Modal::Import(Box::new(f)));
+                    }
+                    Err(e) => self.toasts.error(e.to_string()),
+                },
                 Purpose::Attach(id) => {
                     let r = magpie_core::receipts::attach(&mut self.store, id, &path);
                     if self.toasts.ok(r).is_some() {
@@ -441,7 +448,7 @@ impl App {
                 ctx,
                 crate::dialogs::Purpose::ImportCsv,
                 "Import transactions",
-                ("CSV", &["csv"]),
+                ("Bank statements", magpie_core::statement::EXTENSIONS),
             );
         }
         if pressed(cmd, Key::E) {
@@ -796,7 +803,7 @@ impl App {
             let msg = if self.ledger.selected_one().is_some() && self.page == Page::Ledger {
                 "Drop to attach receipt"
             } else {
-                "Drop a CSV to import"
+                "Drop a bank statement to import"
             };
             painter.text(
                 screen.center() - vec2(0.0, 18.0),
@@ -821,7 +828,7 @@ impl App {
                 .and_then(|e| e.to_str())
                 .unwrap_or("")
                 .to_ascii_lowercase();
-            if ext == "csv" {
+            if magpie_core::statement::EXTENSIONS.contains(&ext.as_str()) {
                 match forms::ImportForm::open(&self.store, path) {
                     Ok(f) => self.open_modal(ctx, Modal::Import(Box::new(f))),
                     Err(e) => self.toasts.error(e.to_string()),

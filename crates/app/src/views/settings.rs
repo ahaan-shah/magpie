@@ -391,7 +391,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         "Everything lives in a single SQLite file on this computer. Exports go to your Downloads folder.",
         |ui| {
             ui.horizontal_wrapped(|ui| {
-                if w::secondary(ui, &t, Some(ph::UPLOAD_SIMPLE), "Import bank CSV").clicked() {
+                if w::secondary(ui, &t, Some(ph::UPLOAD_SIMPLE), "Import bank statement").clicked() {
                     acts.push(Act::ImportCsv);
                 }
                 if has_pear && w::secondary(ui, &t, Some(ph::UPLOAD_SIMPLE), "Import from Pear").clicked() {
@@ -486,7 +486,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     &ctx,
                     crate::dialogs::Purpose::ImportCsv,
                     "Import transactions",
-                    ("CSV", &["csv"]),
+                    ("Bank statements", magpie_core::statement::EXTENSIONS),
                 );
             }
             Act::ImportPear => {

@@ -8,6 +8,9 @@ use std::sync::mpsc;
 #[derive(Clone, Copy, Debug)]
 pub enum Purpose {
     ImportCsv,
+    /// Import chosen during onboarding, with the balance the person typed
+    /// (the account should still show it after the history comes in).
+    ImportFirst(Option<i64>),
     Attach(RowId),
     Backup,
 }
