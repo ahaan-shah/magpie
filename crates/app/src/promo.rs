@@ -59,7 +59,7 @@ struct V { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
 
 /// Two egui renderers on one GPU: the app draws into a mipmapped texture,
 /// the stage samples it and draws the frame, which is read back for encoding.
-struct Stage {
+pub(crate) struct Stage {
     device: wgpu::Device,
     queue: wgpu::Queue,
     app: egui_wgpu::Renderer,
@@ -67,7 +67,7 @@ struct Stage {
     app_levels: Vec<wgpu::TextureView>,
     mip_pipe: wgpu::RenderPipeline,
     mip_groups: Vec<wgpu::BindGroup>,
-    app_id: egui::TextureId,
+    pub app_id: egui::TextureId,
     msaa: wgpu::TextureView,
     out: wgpu::Texture,
     out_view: wgpu::TextureView,
@@ -75,7 +75,7 @@ struct Stage {
 }
 
 impl Stage {
-    fn new() -> Stage {
+    pub(crate) fn new() -> Stage {
         let rs = egui_kittest::wgpu::create_render_state(gpu_setup(), egui_wgpu::RendererOptions::default());
         let device = rs.device.clone();
         let queue = rs.queue.clone();
@@ -302,7 +302,7 @@ impl Stage {
     }
 
     /// Applies texture changes (fonts and such) for a frame that isn't drawn.
-    fn update_app_textures(&mut self, out: &mut egui::FullOutput) {
+    pub(crate) fn update_app_textures(&mut self, out: &mut egui::FullOutput) {
         for (id, deltas) in out.textures_delta.set.drain() {
             for delta in deltas {
                 self.app.update_texture(&self.device, &self.queue, id, &delta);
@@ -313,7 +313,7 @@ impl Stage {
         }
     }
 
-    fn render_app(&mut self, ctx: &Context, out: &mut egui::FullOutput) {
+    pub(crate) fn render_app(&mut self, ctx: &Context, out: &mut egui::FullOutput) {
         let px = [(AW * APP_PPP) as u32, (AH * APP_PPP) as u32];
         Self::draw(
             &mut self.app,
@@ -350,7 +350,7 @@ impl Stage {
         self.queue.submit(std::iter::once(enc.finish()));
     }
 
-    fn render_comp(&mut self, ctx: &Context, out: &mut egui::FullOutput, frame: &mut [u8]) {
+    pub(crate) fn render_comp(&mut self, ctx: &Context, out: &mut egui::FullOutput, frame: &mut [u8]) {
         Self::draw(
             &mut self.comp,
             &self.device,
@@ -409,16 +409,16 @@ enum Focus {
 /// screen point), `scale` screen px per app pt, turned `tilt` radians about
 /// its vertical axis.
 #[derive(Clone, Copy)]
-struct Pose {
-    focus: Pos2,
-    at: Pos2,
-    scale: f32,
-    tilt: f32,
-    alpha: f32,
+pub(crate) struct Pose {
+    pub focus: Pos2,
+    pub at: Pos2,
+    pub scale: f32,
+    pub tilt: f32,
+    pub alpha: f32,
 }
 
 impl Pose {
-    fn project(&self, p: Pos2) -> Pos2 {
+    pub(crate) fn project(&self, p: Pos2) -> Pos2 {
         let c_app = pos2(AW / 2.0, AH / 2.0);
         let center = self.at + (c_app - self.focus) * self.scale;
         let v = (p - c_app) * self.scale;
@@ -462,7 +462,7 @@ fn key_on(t: f32, target: Target, offset: Vec2, at: (f32, f32), scale: f32) -> S
     }
 }
 
-enum Hook {
+pub(crate) enum Hook {
     Go(Page),
     Theme(&'static str),
     Import,
@@ -665,7 +665,7 @@ fn pose_at(keys: &[Shot], resolved: &[Pos2], t: f32) -> Pose {
 // ================================================================ painting
 
 /// A soft radial light with a smooth falloff (no visible rings).
-fn soft_glow(p: &egui::Painter, c: Pos2, radius: f32, color: Color32) {
+pub(crate) fn soft_glow(p: &egui::Painter, c: Pos2, radius: f32, color: Color32) {
     let rings = 64;
     let segs = 96;
     let [r, g, b, a] = color.to_srgba_unmultiplied();
@@ -739,7 +739,7 @@ fn backdrop(p: &egui::Painter, t: f32, window: Pos2, window_alpha: f32) {
 
 /// The app as a floating window: a fine textured grid (so the tilt has
 /// true perspective) with its corners rounded off.
-fn paint_window(p: &egui::Painter, pose: &Pose, tex: egui::TextureId) {
+pub(crate) fn paint_window(p: &egui::Painter, pose: &Pose, tex: egui::TextureId) {
     if pose.alpha <= 0.002 {
         return;
     }
@@ -897,7 +897,7 @@ fn paint_text(p: &egui::Painter, t: f32, x: &Text) {
 }
 
 /// A minimalist bird: two curved strokes, wings beating.
-fn paint_bird(p: &egui::Painter, c: Pos2, span: f32, flap: f32, alpha: f32) {
+pub(crate) fn paint_bird(p: &egui::Painter, c: Pos2, span: f32, flap: f32, alpha: f32) {
     let pts: Vec<Pos2> = (0..=16)
         .map(|i| {
             let u = i as f32 / 8.0 - 1.0;
@@ -1025,7 +1025,7 @@ fn end_card(p: &egui::Painter, t: f32) {
 // ================================================================ the film
 
 /// A short, realistic bank statement for the import scene.
-fn statement_csv() -> std::path::PathBuf {
+pub(crate) fn statement_csv() -> std::path::PathBuf {
     let path = std::env::temp_dir().join("magpie-promo-statement.csv");
     let rows = [
         ("28/09/2026", "WHOLE FOODS MARKET", "86.42", ""),
@@ -1047,7 +1047,7 @@ fn statement_csv() -> std::path::PathBuf {
     path
 }
 
-fn raw(size: Vec2, ppp: f32, t: f32, events: Vec<egui::Event>) -> egui::RawInput {
+pub(crate) fn raw(size: Vec2, ppp: f32, t: f32, events: Vec<egui::Event>) -> egui::RawInput {
     let mut raw = egui::RawInput {
         screen_rect: Some(Rect::from_min_size(Pos2::ZERO, size)),
         time: Some(t as f64),
@@ -1067,7 +1067,21 @@ fn raw(size: Vec2, ppp: f32, t: f32, events: Vec<egui::Event>) -> egui::RawInput
 /// Runs a fresh, deterministic copy of the app through the script, calling
 /// `each` after every frame. It runs twice: once to learn where things
 /// are, once to film.
-fn simulate(script: &Script, mut each: impl FnMut(f32, &Context, &mut egui::FullOutput, &Driver)) {
+fn simulate(script: &Script, each: impl FnMut(f32, &Context, &mut egui::FullOutput, &Driver)) {
+    run_app(&script.beats, &script.hooks, DURATION, 2.4, each);
+}
+
+/// Runs a fresh, deterministic copy of the app (Paper theme, demo data)
+/// through `beats` and `hooks` for `duration` seconds at 60 fps, calling
+/// `each` after every frame. Input starts at `input_from`, which is also
+/// when the app's entrance animations begin.
+pub(crate) fn run_app(
+    beats: &[Beat],
+    hooks: &[(f32, Hook)],
+    duration: f32,
+    input_from: f32,
+    mut each: impl FnMut(f32, &Context, &mut egui::FullOutput, &Driver),
+) {
     let dir = std::env::temp_dir().join("magpie-promo");
     let _ = std::fs::remove_dir_all(&dir);
     let mut store = magpie_core::Store::open(&dir).expect("store");
@@ -1076,8 +1090,7 @@ fn simulate(script: &Script, mut each: impl FnMut(f32, &Context, &mut egui::Full
     let ctx = Context::default();
     let mut app = App::with_context(&ctx, None, store);
     let csv = statement_csv();
-    let beats = script
-        .beats
+    let beats = beats
         .iter()
         .map(|b| Beat {
             t: b.t,
@@ -1087,10 +1100,10 @@ fn simulate(script: &Script, mut each: impl FnMut(f32, &Context, &mut egui::Full
     let mut driver = Driver::new(beats, pos2(AW / 2.0, AH / 2.0));
     let mut next_hook = 0;
     let mut started = false;
-    for frame in 0..(DURATION * FPS) as usize {
+    for frame in 0..(duration * FPS) as usize {
         let t = frame as f32 / FPS;
-        while next_hook < script.hooks.len() && script.hooks[next_hook].0 <= t {
-            match &script.hooks[next_hook].1 {
+        while next_hook < hooks.len() && hooks[next_hook].0 <= t {
+            match &hooks[next_hook].1 {
                 Hook::Go(page) => app.go(&ctx, *page),
                 Hook::Theme(name) => app.set_theme(&ctx, name),
                 Hook::Import => {
@@ -1101,7 +1114,7 @@ fn simulate(script: &Script, mut each: impl FnMut(f32, &Context, &mut egui::Full
             next_hook += 1;
         }
         let events = driver.events(&ctx, t);
-        let on = t >= 2.4;
+        let on = t >= input_from;
         if on && !started {
             started = true;
             app.shown_at = t as f64;

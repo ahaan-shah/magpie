@@ -280,3 +280,6 @@ mod film;
 
 #[cfg(test)]
 mod promo;
+
+#[cfg(test)]
+mod nature;
