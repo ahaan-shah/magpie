@@ -449,22 +449,13 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 if w::primary(ui, &t, Some(ph::CLOUD_ARROW_DOWN), &format!("Update to {}", r.version)).clicked() {
                     acts.push(Act::UpdateAction);
                 }
-                ui.label(
-                    egui::RichText::new("Update available")
-                        .font(theme::medium(13.0))
-                        .color(t.accent),
-                );
+                ui.label(w::subtle(&t, "Update available"));
             }
             Phase::Manual(r, why) => {
                 if w::secondary(ui, &t, Some(ph::DOWNLOAD_SIMPLE), &format!("Download {}", r.version)).clicked() {
                     acts.push(Act::UpdateAction);
                 }
-                ui.label(
-                    egui::RichText::new("Update available")
-                        .font(theme::medium(13.0))
-                        .color(t.accent),
-                );
-                ui.label(w::faint(&t, why));
+                ui.label(w::subtle(&t, "Update available")).on_hover_text(why);
             }
             Phase::Installing(r) => {
                 ui.label(
@@ -500,17 +491,10 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 }
                 match &update_phase {
                     Phase::UpToDate => {
-                        ui.label(w::subtle(
-                            &t,
-                            format!("{}  You're on the latest version", ph::CHECK_CIRCLE),
-                        ));
+                        ui.label(w::subtle(&t, "Magpie is up to date"));
                     }
-                    Phase::Failed(e) => {
-                        ui.label(
-                            egui::RichText::new(format!("Couldn't check: {e}"))
-                                .font(theme::regular(12.5))
-                                .color(t.neg),
-                        );
+                    Phase::Failed(msg) => {
+                        ui.label(w::subtle(&t, msg));
                     }
                     _ => {}
                 }

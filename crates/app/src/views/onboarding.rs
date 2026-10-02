@@ -76,18 +76,12 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                                 .color(t.text),
                         );
                         ui.add_space(6.0);
-                        // "A calm nest for your money." with the nest in the
-                        // accent, then the promise underneath, quieter.
-                        let mut job = egui::text::LayoutJob::default();
-                        let part = |font: egui::FontId, color| egui::TextFormat {
-                            font_id: font,
-                            color,
-                            ..Default::default()
-                        };
-                        job.append("A calm ", 0.0, part(theme::regular(17.0), t.text2));
-                        job.append("nest", 0.0, part(theme::semibold(17.0), t.accent));
-                        job.append(" for your money.", 0.0, part(theme::regular(17.0), t.text2));
-                        ui.label(job);
+                        ui.label(
+                            egui::RichText::new("A calm nest for your money.")
+                                .font(theme::regular(17.0))
+                                .italics()
+                                .color(t.text2),
+                        );
                         ui.add_space(2.0);
                         ui.label(
                             egui::RichText::new("All your data, on your computer.")

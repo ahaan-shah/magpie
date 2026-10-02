@@ -104,7 +104,15 @@ impl Updater {
         let (tx, rx) = mpsc::channel();
         let ctx2 = ctx.clone();
         std::thread::spawn(move || {
-            let r = update::check().map_err(|e| e.to_string());
+            let r = update::check().map_err(|e| match e {
+                magpie_core::Error::Http(m) if m == update::OFFLINE => {
+                    "Couldn't check. Make sure you are connected to the internet.".to_string()
+                }
+                e => {
+                    crate::diag::crumb(format!("update check failed: {e}"));
+                    "Couldn't check for updates right now. Try again later.".to_string()
+                }
+            });
             let _ = tx.send(Msg::Checked(r));
             ctx2.request_repaint();
         });
@@ -190,7 +198,7 @@ impl Updater {
                     Msg::Installed(Err(e)) => {
                         crate::diag::crumb(format!("update failed: {e}"));
                         note = Some(Err(format!("Couldn't update: {e}")));
-                        self.phase = Phase::Failed(e);
+                        self.phase = Phase::Failed(format!("Couldn't update: {e}"));
                     }
                 }
             }

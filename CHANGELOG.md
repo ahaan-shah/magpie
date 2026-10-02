@@ -17,13 +17,6 @@ All notable changes to Magpie are documented here. The format follows
 - `magpie --licenses` prints the licenses of the bundled fonts, icons and
   libraries, which now also ship as THIRD-PARTY-LICENSES.txt in every
   download.
-
-### Changed
-- Settings → About is just "Local-first personal finance. MIT licensed."
-
-## [0.1.5] - 2026-10-02
-
-### Added
 - Import bank statements in whatever format the bank gives you: CSV, TSV or
   text (comma, semicolon, tab or pipe separated; UTF-8, UTF-16 or
   Windows-1252), Excel (.xlsx, .xls), OpenDocument (.ods) and OFX/QFX.
@@ -37,8 +30,9 @@ All notable changes to Magpie are documented here. The format follows
   account at the balance you entered.
 
 ### Changed
-- Onboarding: "A calm nest for your money. All your data, on your
-  computer.", the account name is a placeholder you just type over, and
+- Settings → About is just "Local-first personal finance. MIT licensed."
+- Onboarding: "A calm nest for your money." (in italics) over "All your
+  data, on your computer.", the account name is a placeholder you just type over, and
   "Get started" lost its arrow. The Pear import moved to Settings only.
 - A custom `--data-dir` or `--demo` workspace keeps its own window state.
 

@@ -53,6 +53,10 @@ pub fn is_newer(candidate: &str, current: &str) -> bool {
     }
 }
 
+/// The `Error::Http` message when GitHub couldn't be reached at all (no
+/// connection, DNS failure, timeout), as opposed to answering with an error.
+pub const OFFLINE: &str = "offline";
+
 fn get(url: &str) -> Result<ureq::http::Response<ureq::Body>> {
     ureq::get(url)
         .header("User-Agent", AGENT)
@@ -60,6 +64,11 @@ fn get(url: &str) -> Result<ureq::http::Response<ureq::Body>> {
         .call()
         .map_err(|e| match e {
             ureq::Error::StatusCode(404) => Error::Http("no published release found".into()),
+            ureq::Error::Io(_)
+            | ureq::Error::Timeout(_)
+            | ureq::Error::HostNotFound
+            | ureq::Error::ConnectionFailed
+            | ureq::Error::BodyStalled => Error::Http(OFFLINE.into()),
             e => Error::Http(e.to_string()),
         })
 }
