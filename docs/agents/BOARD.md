@@ -10,5 +10,6 @@ your line when the work is merged.
 
 ## Reserved
 
+- **v2 claimed** by basic-mode (`accounts.icon`, `accounts.style`). Next free: v3.
 - Next database migration index: **check `MIGRATIONS` in `crates/core/src/db.rs`** and claim it here before writing one.
 - Release owner: whoever the maintainer asks; nobody else bumps versions or tags.
