@@ -4,7 +4,10 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.1] - 2026-10-03
+
+Magpie gets a Basic mode: a simpler app for everyday money, alongside
+everything it already does.
 
 ### Added
 - Basic mode: a simpler Magpie for everyday money. Four pages (Home,
@@ -19,6 +22,8 @@ All notable changes to Magpie are documented here. The format follows
 - A Magpie theme in light and dark, in the brand's soft orange, beige,
   green and blue. The sidebar's light/dark button now switches between them,
   and new installs start in Magpie Dark.
+- `install.sh --uninstall` (`curl … | sh -s -- --uninstall`) removes Magpie
+  on Linux and macOS and keeps your data.
 
 ### Changed
 - Creating a category that already exists (in any capitalisation) uses the
@@ -35,8 +40,6 @@ All notable changes to Magpie are documented here. The format follows
   over the icons and the receipts box.
 - With the details panel open, the ledger no longer prints an "Account"
   header over the amounts when that column is hidden.
-- `install.sh --uninstall` (`curl … | sh -s -- --uninstall`) removes Magpie
-  on Linux and macOS and keeps your data.
 
 ## [0.2.0] - 2026-10-02
 

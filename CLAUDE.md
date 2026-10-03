@@ -218,8 +218,9 @@ from the README until they're actually published. The PKGBUILD and cask in
 
 ## Where things stand
 
-- **Released:** up to v0.2.0, the first release with Windows (0.1.5 was
-  folded into 0.1.6). The repo was private until 0.1.6, then made public.
+- **Released:** up to v0.2.1 (Basic mode, Magpie themes, database
+  migration v2 for account card looks). v0.2.0 was the first release with
+  Windows (0.1.5 was folded into 0.1.6). The repo was private until 0.1.6, then made public.
 - **Windows:** Inno Setup installer (`packaging/windows/magpie.iss`,
   x64+ARM64 in one, per-user, upgrades in place, keeps data on uninstall)
   and `install.ps1`. The release job smoke-tests the installer, checks the
