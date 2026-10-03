@@ -150,6 +150,11 @@ fn run(seed: u64, frames: usize) {
         if frame % 250 == 0 {
             app.go(&ctx, pages[(frame / 250) % pages.len()]);
         }
+        // And both modes: Basic swaps in its own Home, Transactions and forms.
+        if frame % 500 == 125 {
+            let basic = !app.basic();
+            app.set_basic(&ctx, basic);
+        }
         let action = rng.below(100);
         let mods = match rng.below(10) {
             0 => Modifiers::COMMAND,

@@ -37,6 +37,36 @@ impl Page {
         Page::Goals,
     ];
 
+    /// Basic mode's pages, in sidebar order.
+    pub const BASIC: [Page; 4] = [Page::Dashboard, Page::Ledger, Page::Budgets, Page::Accounts];
+
+    /// The sidebar pages for a mode (Settings sits apart, at the bottom).
+    pub fn nav(basic: bool) -> &'static [Page] {
+        if basic { &Page::BASIC } else { &Page::NAV }
+    }
+
+    /// Whether the page exists in Basic mode.
+    pub fn in_basic(self) -> bool {
+        self == Page::Settings || Page::BASIC.contains(&self)
+    }
+
+    /// The page's name as shown in a mode: Basic calls the dashboard Home.
+    pub fn title_in(self, basic: bool) -> &'static str {
+        if basic && self == Page::Dashboard {
+            "Home"
+        } else {
+            self.title()
+        }
+    }
+
+    pub fn icon_in(self, basic: bool) -> &'static str {
+        if basic && self == Page::Dashboard {
+            ph::HOUSE
+        } else {
+            self.icon()
+        }
+    }
+
     pub fn title(self) -> &'static str {
         match self {
             Page::Dashboard => "Dashboard",
@@ -96,6 +126,7 @@ pub struct App {
     pub payees: Memo<u64, Vec<analytics::PayeeInfo>>,
     pub palette: Palette,
     pub ledger: views::ledger::State,
+    pub basic_ledger: views::basic_ledger::State,
     pub dashboard: views::dashboard::State,
     pub budgets: views::budgets::State,
     pub reports: views::reports::State,
@@ -103,6 +134,8 @@ pub struct App {
     pub goals: views::goals::State,
     pub settings: views::settings::State,
     pub onboarding: Option<views::onboarding::State>,
+    /// When onboarding handed over: the app fades in from the background.
+    pub intro_at: Option<f64>,
     pub receipts: ReceiptCache,
     pub dialogs: crate::dialogs::Dialogs,
     pub updater: crate::updater::Updater,
@@ -158,9 +191,14 @@ impl App {
             Err(e) => toasts.error(format!("Couldn't post recurring transactions: {e}")),
         }
         let onboarding = (store.is_empty() || !store.settings().onboarded).then(views::onboarding::State::new);
+        let page = persisted
+            .as_ref()
+            .map(|p| p.page)
+            .filter(|p| !store.settings().basic || p.in_basic())
+            .unwrap_or(Page::Dashboard);
         let mut app = App {
             theme,
-            page: persisted.as_ref().map(|p| p.page).unwrap_or(Page::Dashboard),
+            page,
             shown_at: 0.0,
             today,
             toasts,
@@ -170,6 +208,7 @@ impl App {
             payees: Memo::default(),
             palette: Palette::default(),
             ledger: views::ledger::State::default(),
+            basic_ledger: views::basic_ledger::State::new(today),
             dashboard: views::dashboard::State::default(),
             budgets: views::budgets::State::new(today),
             reports: views::reports::State::default(),
@@ -177,6 +216,7 @@ impl App {
             goals: views::goals::State::default(),
             settings: views::settings::State::default(),
             onboarding,
+            intro_at: None,
             receipts: ReceiptCache::default(),
             dialogs: crate::dialogs::Dialogs::default(),
             updater: crate::updater::Updater::default(),
@@ -197,7 +237,45 @@ impl App {
         self.theme.current
     }
 
+    /// True in Basic mode: fewer pages, simpler forms, plainer words.
+    pub fn basic(&self) -> bool {
+        self.store.settings().basic
+    }
+
+    /// Switches between Basic and Advanced. The sidebar folds the extra
+    /// pages in or out and the page fades in again; nothing else changes,
+    /// since both modes show the same data.
+    pub fn set_basic(&mut self, ctx: &egui::Context, basic: bool) {
+        if self.basic() == basic {
+            return;
+        }
+        crate::diag::crumb(format!("mode {}", if basic { "basic" } else { "advanced" }));
+        if self
+            .toasts
+            .ok(self.store.update_settings(|s| s.basic = basic))
+            .is_none()
+        {
+            return;
+        }
+        if basic && !self.page.in_basic() {
+            self.page = Page::Dashboard;
+        }
+        self.ledger.clear_selection();
+        self.shown_at = ctx.input(|i| i.time);
+        self.toasts.info(if basic {
+            concat!("Basic mode. ", shortcut!("Shift T"), " brings everything back.")
+        } else {
+            concat!("Advanced mode. ", shortcut!("Shift T"), " keeps it simple.")
+        });
+    }
+
     pub fn go(&mut self, ctx: &egui::Context, page: Page) {
+        // Pages that Basic mode doesn't have land on Home instead.
+        let page = if self.basic() && !page.in_basic() {
+            Page::Dashboard
+        } else {
+            page
+        };
         if self.page != page {
             crate::diag::crumb(format!("go {page:?}"));
             self.page = page;
@@ -390,17 +468,16 @@ impl App {
         }
         let typing = ctx.memory(|m| m.focused().is_some());
 
+        // Before Ctrl+T (New transfer): egui lets Ctrl+T match Ctrl+Shift+T.
+        let basic = self.basic();
+        if pressed(cmd | shift, Key::T) {
+            self.set_basic(ctx, !basic);
+            return;
+        }
+
         // Pages: Ctrl/Alt + 1–8, Alt + ↑/↓ and Ctrl + (Shift +) Tab to step.
-        let pages = [
-            Page::Dashboard,
-            Page::Ledger,
-            Page::Budgets,
-            Page::Reports,
-            Page::Accounts,
-            Page::Recurring,
-            Page::Goals,
-            Page::Settings,
-        ];
+        let mut pages = Page::nav(basic).to_vec();
+        pages.push(Page::Settings);
         let nums = [
             Key::Num1,
             Key::Num2,
@@ -411,7 +488,7 @@ impl App {
             Key::Num7,
             Key::Num8,
         ];
-        for (k, p) in nums.iter().zip(pages) {
+        for (k, p) in nums.iter().zip(pages.iter().copied()) {
             if pressed(cmd, *k) || pressed(alt, *k) {
                 self.go(ctx, p);
             }
@@ -429,7 +506,7 @@ impl App {
             let m = forms::TxnForm::new(&self.store, self.today);
             self.open_modal(ctx, Modal::Txn(m));
         }
-        if pressed(cmd, Key::T) {
+        if pressed(cmd, Key::T) && !basic {
             let m = forms::TxnForm::transfer(&self.store, self.today);
             self.open_modal(ctx, Modal::Txn(m));
         }
@@ -437,11 +514,11 @@ impl App {
             let m = forms::AccountForm::new(&self.store);
             self.open_modal(ctx, Modal::Account(m));
         }
-        if pressed(cmd, Key::G) {
+        if pressed(cmd, Key::G) && !basic {
             let m = forms::GoalForm::new(&self.store, self.today);
             self.open_modal(ctx, Modal::Goal(m));
         }
-        if pressed(cmd, Key::R) {
+        if pressed(cmd, Key::R) && !basic {
             let m = forms::RuleForm::new(&self.store, self.today);
             self.open_modal(ctx, Modal::Rule(m));
         }
@@ -463,7 +540,11 @@ impl App {
         }
         if pressed(cmd, Key::F) {
             self.go(ctx, Page::Ledger);
-            self.ledger.focus_search = true;
+            if basic {
+                self.basic_ledger.focus_search = true;
+            } else {
+                self.ledger.focus_search = true;
+            }
         }
         if pressed(cmd, Key::Comma) {
             self.go(ctx, Page::Settings);
@@ -549,25 +630,54 @@ impl App {
                 ui.add_space(20.0);
 
                 let item_h = 40.0;
-                let active_idx = Page::NAV.iter().position(|p| *p == self.page);
-                let top = ui.cursor().top();
-                if let Some(i) = active_idx {
-                    let y = motion::tween(
-                        &ctx,
-                        Id::new("nav-indicator"),
-                        top + i as f32 * (item_h + 4.0),
-                        motion::STANDARD,
-                    );
+                let basic = self.basic();
+                // Each page folds in or out of the list when the mode
+                // changes; `vis` is how much of its slot it occupies.
+                let vis: Vec<f32> = Page::NAV
+                    .iter()
+                    .map(|p| {
+                        motion::toggle(
+                            &ctx,
+                            Id::new(("nav-vis", *p as u8)),
+                            !basic || p.in_basic(),
+                            motion::EMPHASIS,
+                        )
+                    })
+                    .collect();
+                let slot = |v: f32| (item_h + 4.0) * v;
+                let total: f32 = vis.iter().map(|v| slot(*v)).sum();
+                let (list, _) = ui.allocate_exact_size(vec2(full.width(), total - 4.0), Sense::hover());
+                if let Some(i) = Page::NAV.iter().position(|p| *p == self.page) {
+                    let target = list.top() + vis[..i].iter().map(|v| slot(*v)).sum::<f32>();
+                    let y = motion::tween(&ctx, Id::new("nav-indicator"), target, motion::STANDARD);
                     let r = Rect::from_min_size(pos2(full.left(), y), vec2(full.width(), item_h));
                     ui.painter().rect_filled(r, CornerRadius::same(10), t.accent_soft());
                     let bar = Rect::from_min_size(pos2(full.left() - 12.0, y + 10.0), vec2(3.0, item_h - 20.0));
                     ui.painter().rect_filled(bar, CornerRadius::same(2), t.accent);
                 }
-                for p in Page::NAV {
-                    if nav_item(ui, &t, p, self.page == p, k, item_h).clicked() {
-                        self.go(&ctx, p);
+                let mut y = list.top();
+                let mut n = 0;
+                for (p, v) in Page::NAV.iter().zip(&vis) {
+                    if *v <= 0.001 {
+                        continue;
                     }
-                    ui.add_space(4.0 - ui.spacing().item_spacing.y);
+                    let h = slot(*v);
+                    if *v >= 0.5 {
+                        n += 1;
+                    }
+                    let rect = Rect::from_min_size(pos2(full.left(), y), vec2(full.width(), item_h));
+                    let mut c = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+                    c.set_clip_rect(Rect::from_min_size(rect.min, vec2(rect.width(), h)).intersect(ui.clip_rect()));
+                    c.set_opacity(*v);
+                    let label = NavLabel {
+                        title: p.title_in(basic),
+                        icon: p.icon_in(basic),
+                        n,
+                    };
+                    if nav_item(&mut c, &t, *p, label, self.page == *p, k, item_h).clicked() && *v > 0.5 {
+                        self.go(&ctx, *p);
+                    }
+                    y += h;
                 }
 
                 // Bottom section
@@ -578,7 +688,7 @@ impl App {
                     let collapsed_now = k > 0.5;
                     let full = ui.max_rect();
                     let btn = 30.0;
-                    let strip_h = if collapsed_now { btn * 2.0 + 6.0 } else { btn };
+                    let strip_h = if collapsed_now { btn * 3.0 + 12.0 } else { btn };
                     let (strip, _) = ui.allocate_exact_size(vec2(full.width(), strip_h), Sense::hover());
                     let icon_cx = motion::lerp(strip.left() + 23.0, strip.center().x, k);
                     let dark = t.dark;
@@ -588,15 +698,17 @@ impl App {
                         ph::CARET_CIRCLE_DOUBLE_LEFT
                     };
                     let theme_glyph = if dark { ph::SUN } else { ph::MOON };
-                    let (collapse_rect, theme_rect) = if collapsed_now {
+                    let (collapse_rect, theme_rect, mode_rect) = if collapsed_now {
                         (
                             Rect::from_center_size(pos2(icon_cx, strip.bottom() - btn / 2.0), vec2(btn, btn)),
+                            Rect::from_center_size(pos2(icon_cx, strip.center().y), vec2(btn, btn)),
                             Rect::from_center_size(pos2(icon_cx, strip.top() + btn / 2.0), vec2(btn, btn)),
                         )
                     } else {
                         (
                             Rect::from_center_size(pos2(icon_cx, strip.center().y), vec2(btn, btn)),
                             Rect::from_center_size(pos2(icon_cx + btn + 8.0, strip.center().y), vec2(btn, btn)),
+                            Rect::from_center_size(pos2(icon_cx + 2.0 * (btn + 8.0), strip.center().y), vec2(btn, btn)),
                         )
                     };
                     let tip = if narrow {
@@ -628,8 +740,30 @@ impl App {
                         let name = if dark { "Daylight" } else { "Midnight" };
                         self.set_theme(&ctx, name);
                     }
+                    let mode_btn = ui
+                        .scope_builder(egui::UiBuilder::new().max_rect(mode_rect), |ui| {
+                            widgets::icon_button(
+                                ui,
+                                &t,
+                                if basic { ph::SLIDERS_HORIZONTAL } else { ph::FEATHER },
+                                if basic {
+                                    concat!("Switch to Advanced mode (", shortcut!("Shift T"), ")")
+                                } else {
+                                    concat!("Switch to Basic mode (", shortcut!("Shift T"), ")")
+                                },
+                            )
+                        })
+                        .inner;
+                    if mode_btn.clicked() {
+                        self.set_basic(&ctx, !basic);
+                    }
                     ui.add_space(4.0);
-                    if nav_item(ui, &t, Page::Settings, self.page == Page::Settings, k, item_h).clicked() {
+                    let label = NavLabel {
+                        title: "Settings",
+                        icon: Page::Settings.icon(),
+                        n: Page::nav(basic).len() + 1,
+                    };
+                    if nav_item(ui, &t, Page::Settings, label, self.page == Page::Settings, k, item_h).clicked() {
                         self.go(&ctx, Page::Settings);
                     }
                     // Just above Settings, where an update naturally lives.
@@ -752,7 +886,7 @@ impl App {
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.label(
-                    egui::RichText::new("Net worth")
+                    egui::RichText::new(if self.basic() { "Total balance" } else { "Net worth" })
                         .font(theme::medium(11.5))
                         .color(motion::with_alpha(t.text3, alpha)),
                 );
@@ -773,7 +907,7 @@ impl App {
             ui.vertical(|ui| {
                 ui.add_space(2.0);
                 ui.label(
-                    egui::RichText::new(self.page.title())
+                    egui::RichText::new(self.page.title_in(self.basic()))
                         .font(theme::display(32.0))
                         .color(t.text),
                 );
@@ -822,8 +956,9 @@ impl App {
                 self.top_bar(&mut ui);
                 ui.set_opacity(p);
                 ui.add_space((1.0 - p) * 12.0);
+                let basic = self.basic();
                 match self.page {
-                    Page::Ledger => views::ledger::show(self, &mut ui),
+                    Page::Ledger if !basic => views::ledger::show(self, &mut ui),
                     page => {
                         // The scroll area reaches the window edge so its bar sits
                         // in the margin, well clear of the content.
@@ -838,7 +973,7 @@ impl App {
                         );
                         let keys = self.keys;
                         crate::widgets::scroll_area()
-                            .id_salt(("page", page as u8))
+                            .id_salt(("page", page as u8, basic))
                             .auto_shrink([false, false])
                             .show(&mut sui, |ui| {
                                 ui.set_max_width(content_w);
@@ -857,7 +992,9 @@ impl App {
                                     dy -= 1e7;
                                 }
                                 // Pages without list selection scroll with the arrows.
-                                if matches!(page, Page::Dashboard | Page::Reports | Page::Settings) {
+                                if matches!(page, Page::Dashboard | Page::Reports | Page::Settings)
+                                    || (basic && page == Page::Ledger)
+                                {
                                     if keys.down {
                                         dy -= 80.0;
                                     }
@@ -879,7 +1016,7 @@ impl App {
                                     Page::Recurring => views::recurring::show(self, ui),
                                     Page::Goals => views::goals::show(self, ui),
                                     Page::Settings => views::settings::show(self, ui),
-                                    Page::Ledger => {}
+                                    Page::Ledger => views::basic_ledger::show(self, ui),
                                 }
                                 ui.add_space(40.0);
                             });
@@ -1043,6 +1180,16 @@ impl App {
         forms::show(self, &ctx);
         crate::palette::show(self, &ctx);
         self.drop_overlay(&ctx);
+        if let Some(at) = self.intro_at {
+            let k = motion::appear(&ctx, at, 0.0, 0.5);
+            if k >= 1.0 {
+                self.intro_at = None;
+            } else {
+                // Above the panels, below modals and toasts.
+                ctx.layer_painter(egui::LayerId::new(egui::Order::Middle, Id::new("intro")))
+                    .rect_filled(ctx.content_rect(), 0.0, motion::with_alpha(t.bg, 1.0 - k));
+            }
+        }
         if let Some(a) = self.toasts.show(&ctx, &t)
             && a == toasts::Action::Undo
         {
@@ -1051,9 +1198,25 @@ impl App {
     }
 }
 
-fn nav_item(ui: &mut Ui, t: &Theme, page: Page, active: bool, collapse: f32, h: f32) -> egui::Response {
+/// What a sidebar row shows, which depends on the mode.
+struct NavLabel {
+    title: &'static str,
+    icon: &'static str,
+    /// Its number for Ctrl/Alt + 1…8.
+    n: usize,
+}
+
+fn nav_item(
+    ui: &mut Ui,
+    t: &Theme,
+    page: Page,
+    label: NavLabel,
+    active: bool,
+    collapse: f32,
+    h: f32,
+) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), h), Sense::click());
-    crate::marks::record(|| format!("nav:{}", page.title()), rect);
+    crate::marks::record(|| format!("nav:{}", label.title), rect);
     let hover = motion::toggle(
         ui.ctx(),
         Id::new(("nav-h", page as u8)),
@@ -1074,7 +1237,7 @@ fn nav_item(ui: &mut Ui, t: &Theme, page: Page, active: bool, collapse: f32, h: 
     p.text(
         pos2(icon_x, rect.center().y),
         Align2::LEFT_CENTER,
-        page.icon(),
+        label.icon,
         theme::regular(18.0),
         icon_c,
     );
@@ -1088,25 +1251,16 @@ fn nav_item(ui: &mut Ui, t: &Theme, page: Page, active: bool, collapse: f32, h: 
         p.text(
             pos2(rect.left() + 44.0, rect.center().y),
             Align2::LEFT_CENTER,
-            page.title(),
+            label.title,
             font,
             motion::with_alpha(fg, a),
         );
     }
-    let n = match page {
-        Page::Dashboard => 1,
-        Page::Ledger => 2,
-        Page::Budgets => 3,
-        Page::Reports => 4,
-        Page::Accounts => 5,
-        Page::Recurring => 6,
-        Page::Goals => 7,
-        Page::Settings => 8,
-    };
+    let n = label.n;
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
         .on_hover_text(format!(
             "{}   ·   {} {n}  or  Alt {n}",
-            page.title(),
+            label.title,
             if cfg!(target_os = "macos") { "Cmd" } else { "Ctrl" }
         ))
 }

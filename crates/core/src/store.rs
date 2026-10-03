@@ -27,6 +27,9 @@ pub struct Settings {
     pub font: String,
     /// Look for a new Magpie release on launch.
     pub auto_update: bool,
+    /// Basic mode: a simpler app with fewer pages. Existing workspaces
+    /// (no setting saved) stay in Advanced.
+    pub basic: bool,
 }
 
 impl Default for Settings {
@@ -42,6 +45,7 @@ impl Default for Settings {
             scroll_speed: 1.0,
             font: "Inter".into(),
             auto_update: true,
+            basic: false,
         }
     }
 }
@@ -128,6 +132,7 @@ impl Store {
         if let Some(v) = db.setting("auto_update")? {
             settings.auto_update = v == "1";
         }
+        settings.basic = db.setting("mode")?.as_deref() == Some("basic");
 
         let mut rates = Rates::defaults();
         for (c, r, manual) in db.rates()? {
@@ -212,6 +217,7 @@ impl Store {
         db.set_setting("scroll_speed", &format!("{:.2}", s.scroll_speed))?;
         db.set_setting("font", &s.font)?;
         db.set_setting("auto_update", if s.auto_update { "1" } else { "0" })?;
+        db.set_setting("mode", if s.basic { "basic" } else { "advanced" })?;
         if let Some(a) = s.default_account {
             db.set_setting("default_account", &a.to_string())?;
         }
@@ -1028,6 +1034,8 @@ pub(crate) mod tests {
             currency: Cur::USD,
             opening: 100_000,
             color: 0x4f8cff,
+            icon: String::new(),
+            style: Default::default(),
             archived: false,
             sort: 0,
         })
@@ -1150,6 +1158,39 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn v1_database_gains_account_looks() {
+        let dir = tempfile::tempdir().unwrap();
+        {
+            // A database as 0.2.0 left it: schema v1 with one account.
+            let conn = rusqlite::Connection::open(dir.path().join("magpie.db")).unwrap();
+            conn.execute_batch(crate::db::MIGRATIONS[0]).unwrap();
+            conn.pragma_update(None, "user_version", 1).unwrap();
+            conn.execute(
+                "INSERT INTO accounts(name, kind, currency, opening, color, archived, sort) \
+                 VALUES ('Main', 'checking', 'INR', 500, 7, 0, 1)",
+                [],
+            )
+            .unwrap();
+        }
+        let mut s = Store::open(dir.path()).unwrap();
+        let mut a = s.accounts()[0].clone();
+        assert_eq!((a.name.as_str(), a.opening), ("Main", 500));
+        assert_eq!((a.icon.as_str(), a.style), ("", CardStyle::Plain));
+        assert!(!s.settings().basic, "existing workspaces stay in Advanced");
+        a.icon = "coffee".into();
+        a.style = CardStyle::Bold;
+        s.save_account(a).unwrap();
+        s.update_settings(|x| x.basic = true).unwrap();
+        drop(s);
+        let s = Store::open(dir.path()).unwrap();
+        assert_eq!(
+            (s.accounts()[0].icon.as_str(), s.accounts()[0].style),
+            ("coffee", CardStyle::Bold)
+        );
+        assert!(s.settings().basic);
+    }
+
+    #[test]
     fn transfer_legs_stay_linked() {
         let mut s = fixture();
         let savings = s
@@ -1160,6 +1201,8 @@ pub(crate) mod tests {
                 currency: Cur::USD,
                 opening: 0,
                 color: 0,
+                icon: String::new(),
+                style: Default::default(),
                 archived: false,
                 sort: 0,
             })

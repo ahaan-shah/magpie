@@ -64,8 +64,49 @@ pub struct Account {
     /// Balance before the first transaction, in minor units.
     pub opening: i64,
     pub color: u32,
+    /// Icon name from the app's picker; empty means "the icon for its kind".
+    pub icon: String,
+    pub style: CardStyle,
     pub archived: bool,
     pub sort: i32,
+}
+
+/// How an account's card is drawn, so people can make it their own.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CardStyle {
+    /// The plain card, with the colour on its icon.
+    #[default]
+    Plain,
+    /// The card washed with the account's colour.
+    Tinted,
+    /// Filled with the colour, like a bank card.
+    Bold,
+}
+
+impl CardStyle {
+    pub const ALL: [CardStyle; 3] = [CardStyle::Plain, CardStyle::Tinted, CardStyle::Bold];
+
+    pub fn as_i64(self) -> i64 {
+        match self {
+            CardStyle::Plain => 0,
+            CardStyle::Tinted => 1,
+            CardStyle::Bold => 2,
+        }
+    }
+    pub fn from_i64(v: i64) -> CardStyle {
+        match v {
+            1 => CardStyle::Tinted,
+            2 => CardStyle::Bold,
+            _ => CardStyle::Plain,
+        }
+    }
+    pub fn label(self) -> &'static str {
+        match self {
+            CardStyle::Plain => "Simple",
+            CardStyle::Tinted => "Tinted",
+            CardStyle::Bold => "Bold",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

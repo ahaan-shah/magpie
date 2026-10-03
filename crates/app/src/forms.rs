@@ -73,6 +73,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         Modal::Confirm(_) => 400.0,
         Modal::Help => 760.0,
         Modal::Goal(_) | Modal::Rule(_) | Modal::Txn(_) => 520.0,
+        Modal::Account(_) => 720.0,
         _ => 460.0,
     };
     let area =
@@ -177,11 +178,11 @@ pub fn account_picker(
 ) {
     let label = store
         .account(*sel)
-        .map(|a| format!("{}  {}", icons::account_kind(a.kind), a.name))
+        .map(|a| format!("{}  {}", icons::account(a), a.name))
         .unwrap_or_else(|| "Choose account".into());
     w::dropdown(ui, id, label, width, |ui| {
         for a in store.active_accounts() {
-            let text = format!("{}  {}  ·  {}", icons::account_kind(a.kind), a.name, a.currency);
+            let text = format!("{}  {}  ·  {}", icons::account(a), a.name, a.currency);
             w::option_value(ui, sel, a.id, text);
         }
     });
@@ -289,7 +290,13 @@ pub struct TxnForm {
 
 impl TxnForm {
     pub fn new(store: &Store, today: Date) -> TxnForm {
-        let account = store.default_account().unwrap_or(0);
+        // Basic mode always starts on the first account people made.
+        let account = if store.settings().basic {
+            store.active_accounts().map(|a| a.id).min()
+        } else {
+            store.default_account()
+        }
+        .unwrap_or(0);
         let to = store
             .active_accounts()
             .map(|a| a.id)
@@ -374,9 +381,12 @@ impl TxnForm {
             (true, _) => "Edit transaction",
         };
         title(ui, t, heading, "");
+        let basic = app.basic();
         if self.editing.is_none() || self.mode != 2 {
             let mut m = self.mode;
-            let opts: &[&str] = if self.editing.is_some() {
+            let opts: &[&str] = if basic {
+                &["Spent", "Received"]
+            } else if self.editing.is_some() {
                 &["Expense", "Income"]
             } else {
                 &["Expense", "Income", "Transfer"]
@@ -443,9 +453,14 @@ impl TxnForm {
             self.date = d;
         } else {
             // Payee with autocomplete from history.
-            w::field_label(ui, t, "Payee");
+            w::field_label(ui, t, if basic { "For what" } else { "Payee" });
             let payee_id = Id::new("txn-payee");
-            let r = w::text_field(ui, t, payee_id, &mut self.payee, "Who was it?", ui.available_width());
+            let hint = match (basic, self.mode) {
+                (false, _) => "Who was it?",
+                (true, 1) => "Salary, a refund, a gift…",
+                (true, _) => "Coffee, rent, groceries…",
+            };
+            let r = w::text_field(ui, t, payee_id, &mut self.payee, hint, ui.available_width());
             let payees = app
                 .payees
                 .get(app.store.version(), || analytics::payee_index(&app.store))
@@ -493,46 +508,72 @@ impl TxnForm {
             } else {
                 CategoryKind::Expense
             };
-            two(
-                ui,
-                |ui, wd| {
-                    w::field_label(ui, t, "Category");
-                    category_picker(ui, t, store, "txn-cat", &mut self.category, wd, Some(kind));
-                },
-                |ui, wd| {
+            if basic {
+                // Category and date; the account only when there's a choice
+                // (it defaults to the first one).
+                let mut d = self.date;
+                two(
+                    ui,
+                    |ui, wd| {
+                        w::field_label(ui, t, "Category");
+                        category_picker(ui, t, store, "txn-cat", &mut self.category, wd, Some(kind));
+                    },
+                    |ui, wd| {
+                        w::field_label(ui, t, "Date");
+                        w::date_field(ui, t, Id::new("txn-date"), &mut d, wd);
+                    },
+                );
+                self.date = d;
+                if store.active_accounts().nth(1).is_some() {
+                    ui.add_space(8.0);
                     w::field_label(ui, t, "Account");
-                    account_picker(ui, store, "txn-acc", &mut self.account, wd);
-                },
-            );
-            if self.category != before {
-                self.auto_category = false;
+                    account_picker(ui, store, "txn-acc", &mut self.account, ui.available_width());
+                }
+                if self.category != before {
+                    self.auto_category = false;
+                }
+            } else {
+                two(
+                    ui,
+                    |ui, wd| {
+                        w::field_label(ui, t, "Category");
+                        category_picker(ui, t, store, "txn-cat", &mut self.category, wd, Some(kind));
+                    },
+                    |ui, wd| {
+                        w::field_label(ui, t, "Account");
+                        account_picker(ui, store, "txn-acc", &mut self.account, wd);
+                    },
+                );
+                if self.category != before {
+                    self.auto_category = false;
+                }
+                ui.add_space(8.0);
+                let mut d = self.date;
+                two(
+                    ui,
+                    |ui, wd| {
+                        w::field_label(ui, t, "Date");
+                        w::date_field(ui, t, Id::new("txn-date"), &mut d, wd);
+                    },
+                    |ui, wd| {
+                        w::field_label(ui, t, "Tags");
+                        w::text_field(ui, t, Id::new("txn-tags"), &mut self.tags, "#groceries #work", wd);
+                    },
+                );
+                self.date = d;
+                ui.add_space(8.0);
+                w::field_label(ui, t, "Note");
+                w::text_area(
+                    ui,
+                    t,
+                    Id::new("txn-note"),
+                    &mut self.note,
+                    "Anything to remember?",
+                    ui.available_width(),
+                );
+                ui.add_space(6.0);
+                w::toggle_row(ui, t, &mut self.cleared, "Cleared");
             }
-            ui.add_space(8.0);
-            let mut d = self.date;
-            two(
-                ui,
-                |ui, wd| {
-                    w::field_label(ui, t, "Date");
-                    w::date_field(ui, t, Id::new("txn-date"), &mut d, wd);
-                },
-                |ui, wd| {
-                    w::field_label(ui, t, "Tags");
-                    w::text_field(ui, t, Id::new("txn-tags"), &mut self.tags, "#groceries #work", wd);
-                },
-            );
-            self.date = d;
-            ui.add_space(8.0);
-            w::field_label(ui, t, "Note");
-            w::text_area(
-                ui,
-                t,
-                Id::new("txn-note"),
-                &mut self.note,
-                "Anything to remember?",
-                ui.available_width(),
-            );
-            ui.add_space(6.0);
-            w::toggle_row(ui, t, &mut self.cleared, "Cleared");
         }
         error_line(ui, t, &self.error);
 
@@ -542,7 +583,7 @@ impl TxnForm {
         let (ok, cancel) = footer(ui, t, if editing { "Save" } else { "Add" }, |ui| {
             if editing {
                 delete = w::danger(ui, t, Some(ph::TRASH), "Delete").clicked();
-                if self.mode != 2 {
+                if self.mode != 2 && !basic {
                     duplicate = w::ghost(ui, t, Some(ph::COPY), "Duplicate").clicked();
                 }
             }
@@ -651,6 +692,9 @@ impl TxnForm {
 pub struct AccountForm {
     acc: Account,
     opening: String,
+    /// Balance change from transactions so far, so the preview card shows
+    /// the real balance as the starting balance is edited.
+    activity: i64,
     error: Option<String>,
 }
 
@@ -665,50 +709,62 @@ impl AccountForm {
                 currency: store.base(),
                 opening: 0,
                 color: magpie_core::demo::PALETTE[n % 16],
+                icon: String::new(),
+                style: Default::default(),
                 archived: false,
                 sort: 0,
             },
             opening: String::new(),
+            activity: 0,
             error: None,
         }
     }
 
-    pub fn edit(a: &Account) -> AccountForm {
+    pub fn edit(store: &Store, a: &Account) -> AccountForm {
+        let balance = analytics::balances(store).get(&a.id).copied().unwrap_or(a.opening);
         AccountForm {
             acc: a.clone(),
             opening: money::to_input(a.opening, a.currency),
+            activity: balance - a.opening,
             error: None,
         }
     }
 
     fn ui(&mut self, app: &mut App, ui: &mut Ui, t: &Theme) -> Outcome {
         let editing = self.acc.id != 0;
+        let basic = app.basic();
+        let base = app.store.base();
+        if basic && !editing {
+            self.acc.currency = base;
+        }
         title(
             ui,
             t,
             if editing { "Edit account" } else { "New account" },
-            "Checking, savings, cards, cash or investments.",
+            "Checking, savings, cards, cash or investments. Make it yours.",
         );
-        w::field_label(ui, t, "Name");
-        w::text_field(
-            ui,
-            t,
-            Id::new("acc-name"),
-            &mut self.acc.name,
-            "e.g. Everyday checking",
-            ui.available_width(),
-        );
-        ui.add_space(8.0);
-        let acc = &mut self.acc;
-        two(
-            ui,
-            |ui, wd| {
+        let gap = 28.0;
+        let col = (ui.available_width() - gap) / 2.0;
+        ui.horizontal_top(|ui| {
+            ui.allocate_ui_with_layout(vec2(col, 0.0), egui::Layout::top_down(egui::Align::Min), |ui| {
+                ui.set_width(col);
+                w::field_label(ui, t, "Name");
+                w::text_field(
+                    ui,
+                    t,
+                    Id::new("acc-name"),
+                    &mut self.acc.name,
+                    "e.g. Everyday checking",
+                    col,
+                );
+                ui.add_space(8.0);
+                let acc = &mut self.acc;
                 w::field_label(ui, t, "Type");
                 w::dropdown(
                     ui,
                     "acc-kind",
                     format!("{}  {}", icons::account_kind(acc.kind), acc.kind.label()),
-                    wd,
+                    col,
                     |ui| {
                         for k in AccountKind::ALL {
                             w::option_value(
@@ -720,34 +776,69 @@ impl AccountForm {
                         }
                     },
                 );
-            },
-            |ui, wd| {
-                w::field_label(ui, t, "Currency");
-                currency_picker(ui, "acc-cur", &mut acc.currency, wd);
-            },
-        );
-        ui.add_space(8.0);
-        w::field_label(ui, t, "Starting balance");
-        w::text_field(
-            ui,
-            t,
-            Id::new("acc-open"),
-            &mut self.opening,
-            "0.00 (negative for a card balance owed)",
-            ui.available_width(),
-        );
-        ui.add_space(8.0);
-        w::field_label(ui, t, "Colour");
-        color_row(ui, t, &mut self.acc.color);
-        if editing {
-            ui.add_space(8.0);
-            w::toggle_row(
-                ui,
-                t,
-                &mut self.acc.archived,
-                "Archived (hidden from pickers and net worth)",
-            );
-        }
+                // Basic keeps everything in the main currency; an account
+                // that already uses another one still shows (and keeps) it.
+                if !basic || acc.currency != base {
+                    ui.add_space(8.0);
+                    w::field_label(ui, t, "Currency");
+                    currency_picker(ui, "acc-cur", &mut acc.currency, col);
+                }
+                ui.add_space(8.0);
+                w::field_label(ui, t, "Starting balance");
+                w::text_field(
+                    ui,
+                    t,
+                    Id::new("acc-open"),
+                    &mut self.opening,
+                    if basic {
+                        "0.00"
+                    } else {
+                        "0.00 (negative for a card balance owed)"
+                    },
+                    col,
+                );
+                if basic {
+                    ui.label(w::faint(t, "For a credit card, put what you owe as a negative."));
+                }
+                if editing {
+                    ui.add_space(10.0);
+                    w::toggle_row(
+                        ui,
+                        t,
+                        &mut self.acc.archived,
+                        if basic {
+                            "Archived (hidden everywhere)"
+                        } else {
+                            "Archived (hidden from pickers and net worth)"
+                        },
+                    );
+                }
+            });
+            ui.add_space(gap - ui.spacing().item_spacing.x);
+            ui.allocate_ui_with_layout(vec2(col, 0.0), egui::Layout::top_down(egui::Align::Min), |ui| {
+                ui.set_width(col);
+                let (r, _) = ui.allocate_exact_size(vec2(col, 150.0), egui::Sense::hover());
+                let opening = money::parse(&self.opening, self.acc.currency).unwrap_or(0);
+                let card = crate::views::accounts::Card {
+                    balance: opening + self.activity,
+                    series: None,
+                    show_currency: !basic || self.acc.currency != base,
+                    in_base: None,
+                    base,
+                };
+                crate::views::accounts::paint_card(ui, t, &self.acc, &card, r, 0.0);
+                ui.add_space(14.0);
+                w::field_label(ui, t, "Colour");
+                color_row(ui, t, &mut self.acc.color);
+                ui.add_space(8.0);
+                w::field_label(ui, t, "Icon");
+                let color = w::cat_color(self.acc.color);
+                account_icon_row(ui, t, &mut self.acc, color);
+                ui.add_space(8.0);
+                w::field_label(ui, t, "Look");
+                style_row(ui, t, &mut self.acc);
+            });
+        });
         error_line(ui, t, &self.error);
         let mut delete = false;
         let (ok, cancel) = footer(ui, t, if editing { "Save" } else { "Create account" }, |ui| {
@@ -859,6 +950,111 @@ fn icon_row(ui: &mut Ui, t: &Theme, icon: &mut String, color: Color32) {
             );
             if resp.on_hover_text(*name).clicked() {
                 *icon = name.to_string();
+            }
+        }
+    });
+}
+
+/// Icons for an account card: the first follows the account's type.
+fn account_icon_row(ui: &mut Ui, t: &Theme, acc: &mut Account, color: Color32) {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
+        let auto = ("", icons::account_kind(acc.kind));
+        // The type's own icon is the first choice, so it isn't listed twice.
+        let rest = icons::ACCOUNT_PICKER.iter().filter(|(_, g)| *g != auto.1);
+        for (name, glyph) in std::iter::once(&auto).chain(rest) {
+            let sel = acc.icon == *name || (name.is_empty() && icons::glyph(&acc.icon) == auto.1);
+            let (r, resp) = ui.allocate_exact_size(vec2(30.0, 30.0), egui::Sense::click());
+            let h = motion::toggle(ui.ctx(), resp.id, resp.hovered(), motion::MICRO);
+            let bg = if sel {
+                t.tint(color, 0.3)
+            } else {
+                motion::with_alpha(t.hover, h)
+            };
+            ui.painter().rect_filled(r, CornerRadius::same(8), bg);
+            ui.painter().text(
+                r.center(),
+                Align2::CENTER_CENTER,
+                *glyph,
+                theme::regular(16.0),
+                if sel { w::readable(t, color) } else { t.text2 },
+            );
+            let tip = if name.is_empty() {
+                "Match the account type"
+            } else {
+                name
+            };
+            if resp.on_hover_text(tip).clicked() {
+                acc.icon = name.to_string();
+            }
+        }
+    });
+}
+
+/// The three card looks, each drawn as a tiny card in the account's colour.
+fn style_row(ui: &mut Ui, t: &Theme, acc: &mut Account) {
+    let color = w::cat_color(acc.color);
+    let gap = 8.0;
+    let wdt = (ui.available_width() - 2.0 * gap) / 3.0;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = gap;
+        for style in magpie_core::CardStyle::ALL {
+            let (r, resp) = ui.allocate_exact_size(vec2(wdt, 56.0), egui::Sense::click());
+            let sel = acc.style == style;
+            let h = motion::toggle(ui.ctx(), resp.id, resp.hovered() || sel, motion::MICRO);
+            let p = ui.painter();
+            let rad = CornerRadius::same(10);
+            let ink = match style {
+                magpie_core::CardStyle::Plain => {
+                    p.rect(r, rad, t.card, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+                    t.text
+                }
+                magpie_core::CardStyle::Tinted => {
+                    p.rect(
+                        r,
+                        rad,
+                        t.tint(color, if t.dark { 0.17 } else { 0.11 }),
+                        Stroke::new(1.0, motion::with_alpha(color, 0.35)),
+                        egui::StrokeKind::Inside,
+                    );
+                    t.text
+                }
+                magpie_core::CardStyle::Bold => {
+                    let top = motion::lerp_color(color, Color32::WHITE, 0.06);
+                    let bottom = motion::lerp_color(color, Color32::BLACK, 0.3);
+                    w::rounded_gradient(p, r, 10.0, top, bottom);
+                    Color32::WHITE
+                }
+            };
+            let dot = egui::Rect::from_min_size(r.min + vec2(10.0, 10.0), vec2(14.0, 14.0));
+            let dot_c = if style == magpie_core::CardStyle::Bold {
+                motion::with_alpha(Color32::WHITE, 0.3)
+            } else {
+                t.tint(color, 0.45)
+            };
+            p.rect_filled(dot, CornerRadius::same(4), dot_c);
+            p.text(
+                egui::pos2(r.left() + 10.0, r.bottom() - 13.0),
+                Align2::LEFT_CENTER,
+                style.label(),
+                theme::medium(12.0),
+                ink,
+            );
+            if h > 0.0 {
+                let ring = if sel {
+                    t.accent
+                } else {
+                    motion::with_alpha(t.text3, 0.6)
+                };
+                p.rect_stroke(
+                    r.expand(2.5),
+                    CornerRadius::same(12),
+                    Stroke::new(if sel { 2.0 } else { 1.0 }, motion::with_alpha(ring, h)),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                acc.style = style;
             }
         }
     });
@@ -1789,6 +1985,7 @@ pub const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
             (concat!(shortcut!("F")), "Search transactions"),
             (concat!(shortcut!(",")), "Settings"),
             (concat!(shortcut!("B")), "Collapse sidebar"),
+            (concat!(shortcut!("Shift T")), "Basic / Advanced mode"),
             ("PgUp · PgDn · Home · End", "Scroll the page"),
             ("? or F1", "This cheat sheet"),
         ],

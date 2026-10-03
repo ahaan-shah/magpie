@@ -992,3 +992,191 @@ fn stills() {
         eprintln!("stills: wrote {path}");
     }
 }
+
+/// Drives the app headlessly frame by frame and saves PNGs, for the stills.
+struct Shots {
+    ctx: Context,
+    renderer: WgpuTestRenderer,
+    t: f64,
+    out: String,
+    suffix: String,
+}
+
+impl Shots {
+    fn step(&mut self, app: &mut App, events: Vec<Event>) -> image::RgbaImage {
+        self.t += 1.0 / 60.0;
+        let mut raw = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
+            time: Some(self.t),
+            events,
+            ..Default::default()
+        };
+        raw.viewports.insert(
+            ViewportId::ROOT,
+            ViewportInfo {
+                native_pixels_per_point: Some(2.0),
+                ..Default::default()
+            },
+        );
+        let mut output = self.ctx.run_ui(raw, |ui| app.frame(ui));
+        self.renderer.handle_delta(&mut output.textures_delta);
+        self.renderer.render(&self.ctx, &output).expect("render")
+    }
+
+    /// Runs `frames` frames with the pointer parked off to the side.
+    fn settle(&mut self, app: &mut App, frames: usize) -> image::RgbaImage {
+        let mut img = None;
+        for _ in 0..frames {
+            img = Some(self.step(app, vec![Event::PointerMoved(pos2(1270.0, 790.0))]));
+        }
+        img.expect("at least one frame")
+    }
+
+    fn click(&mut self, app: &mut App, mark: &str) {
+        let pos = crate::marks::get(mark)
+            .unwrap_or_else(|| panic!("{mark} on screen"))
+            .center();
+        self.step(app, vec![Event::PointerMoved(pos)]);
+        self.step(
+            app,
+            vec![Event::PointerButton {
+                pos,
+                button: PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            }],
+        );
+        self.step(
+            app,
+            vec![Event::PointerButton {
+                pos,
+                button: PointerButton::Primary,
+                pressed: false,
+                modifiers: Modifiers::NONE,
+            }],
+        );
+    }
+
+    fn save(&self, img: image::RgbaImage, name: &str) {
+        let path = format!("{}/{name}-{}.png", self.out, self.suffix);
+        img.save(&path).expect("save");
+        eprintln!("stills: wrote {path}");
+    }
+}
+
+/// `MAGPIE_STILL_DIR=<dir> cargo test -p magpie-finance --profile fast basic_stills -- --ignored`
+/// renders Basic mode's pages, forms, the switch to Advanced, and the
+/// onboarding mode step.
+#[test]
+#[ignore = "renders PNGs for visual review; run explicitly"]
+fn basic_stills() {
+    // SAFETY: single-threaded test setup before the app reads these.
+    unsafe {
+        std::env::set_var("MAGPIE_HEADLESS", "1");
+        std::env::set_var("MAGPIE_TODAY", "2026-09-29");
+    }
+    crate::marks::enable();
+    let out = std::env::var("MAGPIE_STILL_DIR")
+        .unwrap_or_else(|_| std::env::temp_dir().join("magpie-stills").display().to_string());
+    std::fs::create_dir_all(&out).expect("out dir");
+    for theme in ["Paper", "Midnight"] {
+        let dir = std::env::temp_dir().join(format!("magpie-basic-stills-{theme}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut store = magpie_core::Store::open(&dir).expect("store");
+        magpie_core::demo::generate(&mut store, magpie_core::Cur::USD, 3, 0).expect("demo");
+        store
+            .update_settings(|s| {
+                s.theme = theme.into();
+                s.basic = true;
+            })
+            .expect("settings");
+        // Show off the card looks.
+        let accounts = store.accounts().to_vec();
+        for (a, (style, icon)) in accounts.into_iter().zip([
+            (magpie_core::CardStyle::Bold, "bank"),
+            (magpie_core::CardStyle::Tinted, "piggy-bank"),
+            (magpie_core::CardStyle::Plain, ""),
+        ]) {
+            store
+                .save_account(magpie_core::Account {
+                    style,
+                    icon: icon.into(),
+                    ..a
+                })
+                .expect("account");
+        }
+        let ctx = Context::default();
+        let mut app = App::with_context(&ctx, None, store);
+        let mut s = Shots {
+            ctx: ctx.clone(),
+            renderer: WgpuTestRenderer::new(),
+            t: 0.0,
+            out: out.clone(),
+            suffix: theme.to_lowercase(),
+        };
+        for (page, name) in [
+            (crate::app::Page::Dashboard, "basic-home"),
+            (crate::app::Page::Ledger, "basic-ledger"),
+            (crate::app::Page::Budgets, "basic-budgets"),
+            (crate::app::Page::Accounts, "basic-accounts"),
+            (crate::app::Page::Settings, "basic-settings"),
+        ] {
+            app.go(&ctx, page);
+            let img = s.settle(&mut app, 80);
+            s.save(img, name);
+        }
+        let first = app.store.accounts()[0].clone();
+        let f = crate::forms::AccountForm::edit(&app.store, &first);
+        app.open_modal(&ctx, crate::forms::Modal::Account(f));
+        let img = s.settle(&mut app, 60);
+        s.save(img, "basic-account-form");
+        app.modal = None;
+        let f = crate::forms::TxnForm::new(&app.store, app.today);
+        app.open_modal(&ctx, crate::forms::Modal::Txn(f));
+        let img = s.settle(&mut app, 60);
+        s.save(img, "basic-txn-form");
+        app.modal = None;
+
+        // The switch, mid-way and done.
+        app.go(&ctx, crate::app::Page::Dashboard);
+        s.settle(&mut app, 60);
+        app.set_basic(&ctx, false);
+        let img = s.settle(&mut app, 9);
+        s.save(img, "switch-mid");
+        let img = s.settle(&mut app, 80);
+        s.save(img, "switch-advanced");
+        app.go(&ctx, crate::app::Page::Accounts);
+        let img = s.settle(&mut app, 80);
+        s.save(img, "advanced-accounts");
+
+        // Onboarding: Get started, then the mode step.
+        let dir = std::env::temp_dir().join(format!("magpie-basic-stills-new-{theme}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut store = magpie_core::Store::open(&dir).expect("store");
+        store.update_settings(|x| x.theme = theme.into()).expect("theme");
+        let ctx = Context::default();
+        let mut app = App::with_context(&ctx, None, store);
+        s.ctx = ctx.clone();
+        s.renderer = WgpuTestRenderer::new();
+        s.settle(&mut app, 60);
+        s.click(&mut app, "onb:start");
+        let img = s.settle(&mut app, 12);
+        s.save(img, "onboarding-mode-mid");
+        let img = s.settle(&mut app, 60);
+        s.save(img, "onboarding-mode-basic");
+        s.click(&mut app, "onb:Advanced");
+        let img = s.settle(&mut app, 10);
+        s.save(img, "onboarding-mode-crossfade");
+        let img = s.settle(&mut app, 60);
+        s.save(img, "onboarding-mode-advanced");
+        s.click(&mut app, "onb:Basic");
+        s.settle(&mut app, 40);
+        s.click(&mut app, "onb:begin");
+        let img = s.settle(&mut app, 24);
+        s.save(img, "onboarding-begin-mid");
+        let img = s.settle(&mut app, 90);
+        assert!(app.onboarding.is_none(), "Begin opened the app");
+        assert!(app.store.settings().basic, "chose Basic");
+        s.save(img, "onboarding-done");
+    }
+}

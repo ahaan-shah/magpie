@@ -21,6 +21,7 @@ mod dialogs;
 mod forms;
 mod icons;
 mod marks;
+mod modes;
 mod motion;
 mod palette;
 mod receipts_cache;

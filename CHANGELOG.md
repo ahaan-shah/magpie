@@ -7,6 +7,16 @@ All notable changes to Magpie are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Basic mode: a simpler Magpie for everyday money. Four pages (Home,
+  Transactions, Budgets, Accounts), plainer words, and a shorter Add
+  transaction form (amount, what it was for, category, date). Everything
+  else is Advanced mode, which is Magpie as it was. Switch any time in
+  Settings → App mode, from the sidebar, or with `Ctrl Shift T`; both modes
+  show the same data.
+- New users choose Basic or Advanced when they first open Magpie, with a
+  preview of each.
+- Make account cards your own: besides the colour, pick an icon and a look
+  (Simple, Tinted or Bold), with a live preview as you edit.
 - `install.sh --uninstall` (`curl … | sh -s -- --uninstall`) removes Magpie
   on Linux and macOS and keeps your data.
 

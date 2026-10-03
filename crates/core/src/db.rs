@@ -10,7 +10,7 @@ use std::path::Path;
 
 pub type Result<T> = std::result::Result<T, crate::Error>;
 
-const MIGRATIONS: &[&str] = &[
+pub(crate) const MIGRATIONS: &[&str] = &[
     // v1
     r#"
     CREATE TABLE accounts (
@@ -109,6 +109,12 @@ const MIGRATIONS: &[&str] = &[
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
     );
+    "#,
+    // v2: account cards people can make their own. Older versions ignore
+    // the new columns, so a database opened by 0.2.1 still works in 0.2.0.
+    r#"
+    ALTER TABLE accounts ADD COLUMN icon TEXT NOT NULL DEFAULT '';
+    ALTER TABLE accounts ADD COLUMN style INTEGER NOT NULL DEFAULT 0;
     "#,
 ];
 
@@ -228,7 +234,7 @@ impl Db {
 
     pub fn accounts(&self) -> Result<Vec<Account>> {
         let mut st = self.conn.prepare(
-            "SELECT id, name, kind, currency, opening, color, archived, sort FROM accounts ORDER BY sort, id",
+            "SELECT id, name, kind, currency, opening, color, archived, sort, icon, style FROM accounts ORDER BY sort, id",
         )?;
         let rows = st.query_map([], |r| {
             Ok(Account {
@@ -240,6 +246,8 @@ impl Db {
                 color: r.get(5)?,
                 archived: r.get(6)?,
                 sort: r.get(7)?,
+                icon: r.get(8)?,
+                style: CardStyle::from_i64(r.get(9)?),
             })
         })?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
@@ -248,14 +256,37 @@ impl Db {
     pub fn save_account(&self, a: &Account) -> Result<Id> {
         if a.id == 0 {
             self.conn.execute(
-                "INSERT INTO accounts(name, kind, currency, opening, color, archived, sort) VALUES (?1,?2,?3,?4,?5,?6,?7)",
-                params![a.name, a.kind.as_str(), a.currency.code(), a.opening, a.color, a.archived, a.sort],
+                "INSERT INTO accounts(name, kind, currency, opening, color, archived, sort, icon, style) \
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+                params![
+                    a.name,
+                    a.kind.as_str(),
+                    a.currency.code(),
+                    a.opening,
+                    a.color,
+                    a.archived,
+                    a.sort,
+                    a.icon,
+                    a.style.as_i64()
+                ],
             )?;
             Ok(self.conn.last_insert_rowid())
         } else {
             self.conn.execute(
-                "UPDATE accounts SET name=?2, kind=?3, currency=?4, opening=?5, color=?6, archived=?7, sort=?8 WHERE id=?1",
-                params![a.id, a.name, a.kind.as_str(), a.currency.code(), a.opening, a.color, a.archived, a.sort],
+                "UPDATE accounts SET name=?2, kind=?3, currency=?4, opening=?5, color=?6, archived=?7, sort=?8, \
+                 icon=?9, style=?10 WHERE id=?1",
+                params![
+                    a.id,
+                    a.name,
+                    a.kind.as_str(),
+                    a.currency.code(),
+                    a.opening,
+                    a.color,
+                    a.archived,
+                    a.sort,
+                    a.icon,
+                    a.style.as_i64()
+                ],
             )?;
             Ok(a.id)
         }

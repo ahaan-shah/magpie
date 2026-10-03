@@ -58,6 +58,8 @@ pub fn seed_defaults(store: &mut Store, base: Cur) -> Result<()> {
             currency: base,
             opening: 0,
             color: PALETTE[0],
+            icon: String::new(),
+            style: Default::default(),
             archived: false,
             sort: 0,
         })?;
@@ -115,6 +117,8 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
             currency: cur,
             opening,
             color,
+            icon: String::new(),
+            style: Default::default(),
             archived: false,
             sort: 0,
         })

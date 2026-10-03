@@ -98,6 +98,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         .clone();
     let pace = budget::month_progress(m, today);
     let shown = app.shown_at;
+    let basic = app.basic();
     let mut acts = Vec::new();
 
     // Keyboard: ← → months, ↑ ↓ rows, Enter/E edit.
@@ -165,14 +166,16 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     }
                 }
             });
-            if store.undo_label() == Some(FIT_LABEL)
+            if !basic
+                && store.undo_label() == Some(FIT_LABEL)
                 && w::secondary(ui, &t, Some(ph::ARROW_COUNTER_CLOCKWISE), "Undo fit")
                     .on_hover_text("Put your budgets back the way they were")
                     .clicked()
             {
                 acts.push(Act::UndoFit);
             }
-            if !d.lines.is_empty()
+            if !basic
+                && !d.lines.is_empty()
                 && w::ghost(ui, &t, Some(ph::SPARKLE), "Fit to 3-month average")
                     .on_hover_text("Set every budget to your recent average spend")
                     .clicked()
@@ -228,6 +231,14 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 );
                 let msg = if d.lines.is_empty() {
                     "Add a budget to start tracking.".to_string()
+                } else if basic {
+                    let rem = sum.remaining();
+                    match (rem >= 0, m == Month::of(today)) {
+                        (true, true) => format!("You have {} left to spend this month.", w::fmt_whole(rem, base)),
+                        (false, true) => format!("You're {} over budget this month.", w::fmt_whole(-rem, base)),
+                        (true, false) => format!("{} left over in {}.", w::fmt_whole(rem, base), m.label()),
+                        (false, false) => format!("{} over budget in {}.", w::fmt_whole(-rem, base), m.label()),
+                    }
                 } else if m == Month::of(today) {
                     let ahead = used - pace;
                     let mood = if ahead > 0.05 {
@@ -436,6 +447,7 @@ fn budget_row(
     selected: bool,
     scroll_into_view: bool,
 ) {
+    let basic = app.basic();
     let store = &app.store;
     let base = store.base();
     let Some(cat) = store.category(l.category) else { return };
@@ -565,15 +577,22 @@ fn budget_row(
             w::field_label(ui, t, "Monthly amount");
             w::text_field(ui, t, Id::new(("bamt", l.category)), &mut st.amount, "0", 130.0);
             let avg = d.averages.iter().find(|x| x.0 == l.category).map(|x| x.1).unwrap_or(0);
-            if avg > 0 && w::ghost(ui, t, None, &format!("3-mo avg {}", w::fmt_whole(avg, base))).clicked() {
+            let hint = if basic {
+                format!("You usually spend {}", w::fmt_whole(avg, base))
+            } else {
+                format!("3-mo avg {}", w::fmt_whole(avg, base))
+            };
+            if avg > 0 && w::ghost(ui, t, None, &hint).clicked() {
                 st.amount = money::to_input(avg, base);
             }
         });
-        c.horizontal_wrapped(|ui| {
-            w::toggle_row(ui, t, &mut st.this_month_only, &format!("Only for {}", m.label()));
-            ui.add_space(12.0);
-            w::toggle_row(ui, t, &mut rollover, "Roll leftovers into next month");
-        });
+        if !basic {
+            c.horizontal_wrapped(|ui| {
+                w::toggle_row(ui, t, &mut st.this_month_only, &format!("Only for {}", m.label()));
+                ui.add_space(12.0);
+                w::toggle_row(ui, t, &mut rollover, "Roll leftovers into next month");
+            });
+        }
         c.add_space(4.0);
         c.horizontal(|ui| {
             if w::primary(ui, t, None, "Save").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {

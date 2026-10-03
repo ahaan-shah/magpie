@@ -423,6 +423,8 @@ mod tests {
                 currency: crate::Cur::USD,
                 opening: 0,
                 color: 0,
+                icon: String::new(),
+                style: Default::default(),
                 archived: false,
                 sort: 0,
             })

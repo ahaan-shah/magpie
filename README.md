@@ -127,6 +127,7 @@ You can also download `Magpie-windows-setup.exe` from the [latest release](https
 | `Ctrl F` | Search transactions |
 | `Ctrl Z` / `Ctrl Shift Z` | Undo / redo |
 | `Ctrl 1`–`7` | Switch pages |
+| `Ctrl Shift T` | Switch between Basic and Advanced mode |
 | `N` or `/` | Focus quick add (Transactions) |
 | `↑` `↓` / `J` `K` | Move the selection |
 | `Enter` · `Delete` · `Esc` | Edit · delete · clear selection |

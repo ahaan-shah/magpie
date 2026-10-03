@@ -49,6 +49,7 @@ enum Cmd {
     Redo,
     RefreshFx,
     SearchLedger(String),
+    Mode(bool),
 }
 
 struct Item {
@@ -60,44 +61,60 @@ struct Item {
 
 fn items(app: &mut App, q: &str) -> Vec<Item> {
     let mut v = Vec::new();
-    for p in Page::NAV.iter().chain([Page::Settings].iter()) {
+    let basic = app.basic();
+    for p in Page::nav(basic).iter().chain([Page::Settings].iter()) {
         v.push(Item {
-            icon: p.icon(),
-            label: format!("Go to {}", p.title()),
+            icon: p.icon_in(basic),
+            label: format!("Go to {}", p.title_in(basic)),
             hint: "Navigate",
             cmd: Cmd::Go(*p),
         });
     }
+    v.push(Item {
+        icon: if basic { ph::SLIDERS_HORIZONTAL } else { ph::FEATHER },
+        label: if basic {
+            "Switch to Advanced mode"
+        } else {
+            "Switch to Basic mode"
+        }
+        .into(),
+        hint: shortcut!("Shift T"),
+        cmd: Cmd::Mode(!basic),
+    });
     v.push(Item {
         icon: ph::PLUS,
         label: "New transaction".into(),
         hint: shortcut!("N"),
         cmd: Cmd::NewTxn,
     });
-    v.push(Item {
-        icon: ph::ARROWS_LEFT_RIGHT,
-        label: "New transfer".into(),
-        hint: "Action",
-        cmd: Cmd::NewTransfer,
-    });
+    if !basic {
+        v.push(Item {
+            icon: ph::ARROWS_LEFT_RIGHT,
+            label: "New transfer".into(),
+            hint: "Action",
+            cmd: Cmd::NewTransfer,
+        });
+    }
     v.push(Item {
         icon: ph::WALLET,
         label: "New account".into(),
         hint: "Action",
         cmd: Cmd::NewAccount,
     });
-    v.push(Item {
-        icon: ph::TARGET,
-        label: "New savings goal".into(),
-        hint: "Action",
-        cmd: Cmd::NewGoal,
-    });
-    v.push(Item {
-        icon: ph::ARROWS_CLOCKWISE,
-        label: "New recurring transaction".into(),
-        hint: "Action",
-        cmd: Cmd::NewRule,
-    });
+    if !basic {
+        v.push(Item {
+            icon: ph::TARGET,
+            label: "New savings goal".into(),
+            hint: "Action",
+            cmd: Cmd::NewGoal,
+        });
+        v.push(Item {
+            icon: ph::ARROWS_CLOCKWISE,
+            label: "New recurring transaction".into(),
+            hint: "Action",
+            cmd: Cmd::NewRule,
+        });
+    }
     if let Some(l) = app.store.undo_label() {
         v.push(Item {
             icon: ph::ARROW_COUNTER_CLOCKWISE,
@@ -127,12 +144,14 @@ fn items(app: &mut App, q: &str) -> Vec<Item> {
             cmd: Cmd::Export(f),
         });
     }
-    v.push(Item {
-        icon: ph::CURRENCY_CIRCLE_DOLLAR,
-        label: "Refresh exchange rates".into(),
-        hint: "ECB",
-        cmd: Cmd::RefreshFx,
-    });
+    if !basic {
+        v.push(Item {
+            icon: ph::CURRENCY_CIRCLE_DOLLAR,
+            label: "Refresh exchange rates".into(),
+            hint: "ECB",
+            cmd: Cmd::RefreshFx,
+        });
+    }
     for th in THEMES {
         v.push(Item {
             icon: ph::PALETTE,
@@ -241,8 +260,13 @@ fn run(app: &mut App, ctx: &egui::Context, cmd: Cmd) {
         Cmd::RefreshFx => app.maybe_refresh_fx(ctx, true),
         Cmd::SearchLedger(q) => {
             app.go(ctx, Page::Ledger);
-            app.ledger.set_search(q);
+            if app.basic() {
+                app.basic_ledger.set_search(q);
+            } else {
+                app.ledger.set_search(q);
+            }
         }
+        Cmd::Mode(basic) => app.set_basic(ctx, basic),
     }
 }
 

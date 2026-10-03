@@ -1,4 +1,5 @@
 pub mod accounts;
+pub mod basic_ledger;
 pub mod budgets;
 pub mod dashboard;
 pub mod goals;

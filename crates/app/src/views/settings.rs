@@ -37,6 +37,7 @@ enum Act {
     CheckUpdates,
     UpdateAction,
     AutoUpdate(bool),
+    Mode(bool),
 }
 
 pub fn export_all(app: &mut App, f: Format) {
@@ -73,6 +74,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let update_progress = app.updater.progress;
     let mut auto_update = app.store.settings().auto_update;
     let s_font = app.store.settings().font.clone();
+    let basic = app.basic();
     // ← / → cycle themes on this page.
     if app.keys.left || app.keys.right {
         let i = THEMES.iter().position(|x| x.name == current_theme).unwrap_or(0);
@@ -80,6 +82,30 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         let j = if app.keys.right { (i + 1) % n } else { (i + n - 1) % n };
         acts.push(Act::Theme(THEMES[j].name));
     }
+    section(
+        ui,
+        &t,
+        "App mode",
+        "Basic keeps Magpie simple. Advanced shows everything. Your data is the same either way.",
+        |ui| {
+            let gap = 16.0;
+            let wdt = (ui.available_width() - gap) / 2.0;
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = gap;
+                for b in [true, false] {
+                    if mode_tile(ui, &t, b, basic == b, wdt).clicked() {
+                        acts.push(Act::Mode(b));
+                    }
+                }
+            });
+            ui.add_space(8.0);
+            ui.label(w::faint(
+                &t,
+                concat!("Switch from anywhere with ", shortcut!("Shift T"), "."),
+            ));
+        },
+    );
+
     section(
         ui,
         &t,
@@ -99,45 +125,47 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 });
                 ui.add_space(10.0);
             }
-            ui.add_space(18.0);
-            ui.label(egui::RichText::new("Font").font(theme::semibold(14.0)).color(t.text));
-            ui.label(w::subtle(&t, "Every font is bundled with Magpie and works offline."));
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                let current = s_font.clone();
-                let label = egui::RichText::new(&current)
-                    .family(theme::preview_family(&current))
-                    .size(14.5)
-                    .color(t.text);
-                w::dropdown(ui, "font-picker", label, 240.0, |ui| {
-                    for f in theme::FONTS {
-                        let mut text = egui::RichText::new(f.name)
-                            .family(theme::preview_family(f.name))
-                            .size(15.0);
-                        if f.name == current {
-                            text = text.color(t.accent);
+            if !basic {
+                ui.add_space(18.0);
+                ui.label(egui::RichText::new("Font").font(theme::semibold(14.0)).color(t.text));
+                ui.label(w::subtle(&t, "Every font is bundled with Magpie and works offline."));
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    let current = s_font.clone();
+                    let label = egui::RichText::new(&current)
+                        .family(theme::preview_family(&current))
+                        .size(14.5)
+                        .color(t.text);
+                    w::dropdown(ui, "font-picker", label, 240.0, |ui| {
+                        for f in theme::FONTS {
+                            let mut text = egui::RichText::new(f.name)
+                                .family(theme::preview_family(f.name))
+                                .size(15.0);
+                            if f.name == current {
+                                text = text.color(t.accent);
+                            }
+                            let resp = w::option(ui, f.name == current, text);
+                            let resp = if f.mono {
+                                resp.on_hover_text("Monospaced — every character the same width")
+                            } else {
+                                resp
+                            };
+                            if resp.clicked() && f.name != current {
+                                acts.push(Act::Font(f.name));
+                            }
                         }
-                        let resp = w::option(ui, f.name == current, text);
-                        let resp = if f.mono {
-                            resp.on_hover_text("Monospaced — every character the same width")
-                        } else {
-                            resp
-                        };
-                        if resp.clicked() && f.name != current {
-                            acts.push(Act::Font(f.name));
-                        }
+                    });
+                    if theme::font_by_name(&current).mono {
+                        w::chip(ui, &t, None, "monospace", t.text2);
                     }
+                    ui.add_space(12.0);
+                    ui.label(
+                        egui::RichText::new("Groceries  ·  $1,284.50  ·  Sep 30")
+                            .font(theme::regular(14.0))
+                            .color(t.text2),
+                    );
                 });
-                if theme::font_by_name(&current).mono {
-                    w::chip(ui, &t, None, "monospace", t.text2);
-                }
-                ui.add_space(12.0);
-                ui.label(
-                    egui::RichText::new("Groceries  ·  $1,284.50  ·  Sep 30")
-                        .font(theme::regular(14.0))
-                        .color(t.text2),
-                );
-            });
+            }
             ui.add_space(18.0);
             ui.label(
                 egui::RichText::new("Interface size")
@@ -189,6 +217,9 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     acts.push(Act::Scale(zoom + 0.05));
                 }
             });
+            if basic {
+                return;
+            }
             ui.add_space(18.0);
             ui.label(
                 egui::RichText::new("Scroll speed")
@@ -225,8 +256,12 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     section(
         ui,
         &t,
-        "Currency & exchange rates",
-        "Totals, budgets and reports use your main currency. Accounts can each use their own.",
+        if basic { "Currency" } else { "Currency & exchange rates" },
+        if basic {
+            "Everything is shown in your main currency."
+        } else {
+            "Totals, budgets and reports use your main currency. Accounts can each use their own."
+        },
         |ui| {
             ui.horizontal(|ui| {
                 w::field_label(ui, &t, "Main currency");
@@ -236,6 +271,9 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     acts.push(Act::Base(base));
                 }
             });
+            if basic {
+                return;
+            }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 let mut auto = s.fx_auto;
@@ -438,9 +476,11 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         },
     );
 
-    section(ui, &t, "Keyboard", "Press ? anywhere to see this list.", |ui| {
-        forms::shortcut_table(ui, &t, 2);
-    });
+    if !basic {
+        section(ui, &t, "Keyboard", "Press ? anywhere to see this list.", |ui| {
+            forms::shortcut_table(ui, &t, 2);
+        });
+    }
 
     section(ui, &t, "About", "", |ui| {
         use crate::updater::Phase;
@@ -536,6 +576,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             Act::AutoUpdate(v) => {
                 app.toasts.ok(app.store.update_settings(|s| s.auto_update = v));
             }
+            Act::Mode(b) => app.set_basic(&ctx, b),
             Act::SetRate(c, per_eur) => {
                 if app.toasts.ok(app.store.set_rate(c, per_eur, true)).is_some() {
                     app.settings.rate_edit = None;
@@ -616,6 +657,48 @@ fn fmt_rate(r: f64) -> String {
 }
 
 /// A miniature rendering of a theme.
+/// One mode to choose: its preview, name and tagline.
+fn mode_tile(ui: &mut Ui, t: &Theme, basic: bool, selected: bool, width: f32) -> egui::Response {
+    let (r, resp) = ui.allocate_exact_size(vec2(width, 150.0), Sense::click());
+    crate::marks::record(|| format!("mode:{}", crate::modes::mode(basic).name), r);
+    let h = motion::toggle(ui.ctx(), Id::new(("mode-tile-h", basic)), resp.hovered(), motion::MICRO);
+    let s = motion::toggle(ui.ctx(), Id::new(("mode-tile-s", basic)), selected, motion::STANDARD);
+    let p = ui.painter();
+    let fill = motion::lerp_color(motion::lerp_color(t.card, t.hover, h * 0.6), t.accent_soft(), s);
+    p.rect(
+        r,
+        CornerRadius::same(12),
+        fill,
+        Stroke::new(1.0 + s * 0.5, motion::lerp_color(t.border, t.accent, s)),
+        egui::StrokeKind::Inside,
+    );
+    let inner = r.shrink(14.0);
+    let pw = (inner.height() * 1.5).min(inner.width() * 0.5);
+    let pr = Rect::from_min_size(inner.min, vec2(pw, pw / 1.5));
+    crate::modes::paint_preview(p, t, pr, if basic { 0.0 } else { 1.0 });
+    let m = crate::modes::mode(basic);
+    let x = pr.right() + 16.0;
+    let text_w = inner.right() - x;
+    let radio = pos2(inner.right() - 8.0, inner.top() + 9.0);
+    p.circle_stroke(radio, 8.0, Stroke::new(1.5, motion::lerp_color(t.text3, t.accent, s)));
+    if s > 0.01 {
+        p.circle_filled(radio, 4.5 * s, t.accent);
+    }
+    p.text(
+        pos2(x, inner.top()),
+        Align2::LEFT_TOP,
+        m.name,
+        theme::semibold(15.0),
+        t.text,
+    );
+    let g = p.layout(m.tagline.to_string(), theme::medium(13.0), t.text, text_w);
+    let tag_h = g.size().y;
+    p.galley(pos2(x, inner.top() + 24.0), g, t.text);
+    let g = p.layout(m.detail.to_string(), theme::regular(12.5), t.text2, text_w);
+    p.galley(pos2(x, inner.top() + 30.0 + tag_h), g, t.text2);
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 fn theme_tile(ui: &mut Ui, t: &Theme, th: &Theme, selected: bool) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(168.0, 112.0), Sense::click());
     let h = motion::toggle(

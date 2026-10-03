@@ -52,12 +52,50 @@ pub const PICKER: &[(&str, &str)] = &[
     ("tag", ph::TAG),
 ];
 
+/// Icons offered for account cards (names may overlap with [`PICKER`]).
+pub const ACCOUNT_PICKER: &[(&str, &str)] = &[
+    ("bank", ph::BANK),
+    ("piggy-bank", ph::PIGGY_BANK),
+    ("credit-card", ph::CREDIT_CARD),
+    ("wallet", ph::WALLET),
+    ("coins", ph::COINS),
+    ("hand-coins", ph::HAND_COINS),
+    ("chart-line-up", ph::CHART_LINE_UP),
+    ("vault", ph::VAULT),
+    ("briefcase", ph::BRIEFCASE),
+    ("house", ph::HOUSE),
+    ("car", ph::CAR),
+    ("airplane-tilt", ph::AIRPLANE_TILT),
+    ("graduation-cap", ph::GRADUATION_CAP),
+    ("gift", ph::GIFT),
+    ("heart", ph::HEART),
+    ("star", ph::STAR),
+    ("plant", ph::PLANT),
+    ("paw-print", ph::PAW_PRINT),
+    ("game-controller", ph::GAME_CONTROLLER),
+    ("sparkle", ph::SPARKLE),
+    ("lifebuoy", ph::LIFEBUOY),
+    ("device-mobile", ph::DEVICE_MOBILE),
+    ("shopping-cart", ph::SHOPPING_CART),
+    ("coffee", ph::COFFEE),
+];
+
 pub fn glyph(name: &str) -> &'static str {
     PICKER
         .iter()
+        .chain(ACCOUNT_PICKER)
         .find(|(n, _)| *n == name)
         .map(|(_, g)| *g)
         .unwrap_or(ph::TAG)
+}
+
+/// An account's own icon, or the one for its kind if it hasn't picked one.
+pub fn account(a: &magpie_core::Account) -> &'static str {
+    if a.icon.is_empty() {
+        account_kind(a.kind)
+    } else {
+        glyph(&a.icon)
+    }
 }
 
 pub fn account_kind(kind: magpie_core::AccountKind) -> &'static str {

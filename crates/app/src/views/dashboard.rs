@@ -107,6 +107,9 @@ enum Act {
 }
 
 pub fn show(app: &mut App, ui: &mut Ui) {
+    if app.basic() {
+        return show_basic(app, ui);
+    }
     let t = app.t();
     let today = app.today;
     let d = app
@@ -275,7 +278,9 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             0 => w::card_scroll(ui, &t, "dash-recent", rect, |ui| {
                 recent_card(ui, &t, store, &d, today, &mut acts)
             }),
-            _ => w::card_scroll(ui, &t, "dash-goals", rect, |ui| goals_card(ui, &t, &d, &mut acts)),
+            _ => w::card_scroll(ui, &t, "dash-goals", rect, |ui| {
+                goals_card(ui, &t, &d, false, &mut acts)
+            }),
         })
     });
 
@@ -288,12 +293,128 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         });
     }
 
+    apply(app, ui, acts);
+}
+
+/// Basic mode's Home: how this month is going, where the money went, and
+/// budgets (plus goals, once there are any). Nothing else.
+fn show_basic(app: &mut App, ui: &mut Ui) {
+    let t = app.t();
+    let today = app.today;
+    let d = app
+        .dashboard
+        .memo
+        .get((app.store.version(), today), || Rc::new(build(&app.store, today)))
+        .clone();
+    let shown = app.shown_at;
+    let mut acts: Vec<Act> = Vec::new();
+    let store = &app.store;
+
+    if !d.confirm.is_empty() {
+        confirm_banner(ui, &t, store, &d, &mut acts);
+    }
+    w::grid_row(ui, 336.0, &[1.0, 1.25], |i, ui, rect| {
+        w::with_reveal(ui, shown, i, rect, |ui, rect| match i {
+            0 => month_basic(ui, &t, rect, &d),
+            _ => w::card_in(ui, &t, rect, |ui| categories_card(ui, &t, store, &d, &mut acts)),
+        })
+    });
+    let weights: &[f32] = if d.goals.is_empty() { &[1.0] } else { &[1.0, 1.0] };
+    w::grid_row(ui, 316.0, weights, |i, ui, rect| {
+        w::with_reveal(ui, shown, 2 + i, rect, |ui, rect| match i {
+            0 => w::card_scroll(ui, &t, "home-budgets", rect, |ui| {
+                budgets_card(ui, &t, store, &d, &mut acts)
+            }),
+            _ => w::card_scroll(ui, &t, "home-goals", rect, |ui| goals_card(ui, &t, &d, true, &mut acts)),
+        })
+    });
+    apply(app, ui, acts);
+}
+
+/// "This month" in plain words: what's left, what came in, what went out.
+fn month_basic(ui: &mut Ui, t: &Theme, rect: Rect, d: &Dash) {
+    crate::marks::record(|| "home:month".into(), rect);
+    w::card_in(ui, t, rect, |ui| {
+        let base = d.base;
+        w::card_header(ui, t, "This month", |ui| {
+            ui.label(w::faint(t, d.month.label()));
+        });
+        ui.add_space(4.0);
+        let left = d.this.net();
+        ui.label(w::faint(t, "Left this month"));
+        w::animated_amount(
+            ui,
+            Id::new("home-left"),
+            left,
+            base,
+            theme::display(36.0),
+            if left < 0 { t.neg } else { t.text },
+        );
+        let note = match d.this.savings_rate() {
+            None => "Nothing has come in yet this month.".to_string(),
+            Some(_) if left < 0 => "More has gone out than came in.".to_string(),
+            Some(r) => format!("You've kept {:.0}% of what came in.", r * 100.0),
+        };
+        ui.label(w::subtle(t, note));
+        ui.add_space(16.0);
+        let col = (ui.available_width() - 12.0) / 2.0;
+        ui.horizontal(|ui| {
+            for (i, (label, icon, value, color)) in [
+                ("Money in", ph::ARROW_DOWN_LEFT, d.this.income, t.pos),
+                ("Money out", ph::ARROW_UP_RIGHT, d.this.expense, t.neg),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                ui.allocate_ui_with_layout(
+                    vec2(col, 52.0),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        w::icon_badge(ui, t, icon, color, 34.0);
+                        ui.add_space(4.0);
+                        ui.vertical(|ui| {
+                            ui.label(w::faint(t, label));
+                            w::animated_amount(
+                                ui,
+                                Id::new(("home-flow", i)),
+                                value,
+                                base,
+                                theme::semibold(17.0),
+                                if i == 0 { t.pos } else { t.text },
+                            );
+                        });
+                    },
+                );
+            }
+        });
+        if d.budget_sum.available > 0 {
+            ui.add_space(14.0);
+            let used = d.budget_sum.spent as f32 / d.budget_sum.available as f32;
+            let c = w::usage_color(t, used, d.pace);
+            w::progress(ui, t, Id::new("home-budget"), used, Some(d.pace), c, 8.0);
+            ui.label(w::faint(
+                t,
+                format!(
+                    "{} of your {} budget used",
+                    w::fmt_whole(d.budget_sum.spent, base),
+                    w::fmt_whole(d.budget_sum.available, base)
+                ),
+            ));
+        }
+    });
+}
+
+fn apply(app: &mut App, ui: &Ui, acts: Vec<Act>) {
     let ctx = ui.ctx().clone();
     for a in acts {
         match a {
             Act::Go(p) => app.go(&ctx, p),
             Act::CategoryLedger(c, m) => {
-                app.ledger.show_category(c, m);
+                if app.basic() {
+                    app.basic_ledger.show_category(c, m);
+                } else {
+                    app.ledger.show_category(c, m);
+                }
                 app.go(&ctx, Page::Ledger);
             }
             Act::EditTxn(id) => {
@@ -803,9 +924,10 @@ pub fn list_row(ui: &mut Ui, t: &Theme, id: Id, paint: impl FnOnce(&mut Ui, Rect
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
-fn goals_card(ui: &mut Ui, t: &Theme, d: &Dash, acts: &mut Vec<Act>) {
+fn goals_card(ui: &mut Ui, t: &Theme, d: &Dash, basic: bool, acts: &mut Vec<Act>) {
     w::card_header(ui, t, "Goals", |ui| {
-        if w::ghost(ui, t, None, "See all").clicked() {
+        // Basic mode has no Goals page; the card is the whole feature.
+        if !basic && w::ghost(ui, t, None, "See all").clicked() {
             acts.push(Act::Go(Page::Goals));
         }
     });

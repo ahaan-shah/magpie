@@ -872,15 +872,21 @@ pub fn fmt_compact(v: i64, cur: Cur) -> String {
 
 /// A large amount that counts up/down smoothly to its new value.
 pub fn animated_amount(ui: &mut Ui, id: Id, value: i64, cur: Cur, font: egui::FontId, color: Color32) -> Response {
+    let v = animated_value(ui.ctx(), id, value, cur);
+    ui.label(egui::RichText::new(fmt_money(v, cur)).font(font).color(color))
+}
+
+/// An amount that counts smoothly to `value` when it changes, for painting
+/// it yourself (see [`animated_amount`]).
+pub fn animated_value(ctx: &egui::Context, id: Id, value: i64, cur: Cur) -> i64 {
     let scale = cur.scale() as f32;
-    let shown = motion::tween(ui.ctx(), id, value as f32 / scale, motion::EMPHASIS * 1.6);
+    let shown = motion::tween(ctx, id, value as f32 / scale, motion::EMPHASIS * 1.6);
     let shown = (shown as f64 * scale as f64).round() as i64;
-    let v = if (shown - value).abs() as f32 <= scale * 0.01 {
+    if (shown - value).abs() as f32 <= scale * 0.01 {
         value
     } else {
         shown
-    };
-    ui.label(egui::RichText::new(fmt_money(v, cur)).font(font).color(color))
+    }
 }
 
 // ----------------------------------------------------------- misc pieces

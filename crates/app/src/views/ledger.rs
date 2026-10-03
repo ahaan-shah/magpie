@@ -676,7 +676,7 @@ fn filter_dropdowns(ui: &mut Ui, store: &Store, st: &mut State, today: Date) {
                 ui,
                 &mut st.account,
                 Some(a.id),
-                format!("{}  {}", icons::account_kind(a.kind), a.name),
+                format!("{}  {}", icons::account(a), a.name),
             );
         }
     });
