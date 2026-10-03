@@ -1185,8 +1185,28 @@ fn basic_stills() {
         s.save(img, "whatsnew-card");
         s.click(&mut app, "whatsnew:ok");
         s.settle(&mut app, 30);
+        assert!(!app.whats_new.pending, "Got it puts the row away");
+        // And moving to another page does too.
+        app.whats_new.pending = true;
         app.go(&ctx, crate::app::Page::Settings);
         assert!(!app.whats_new.pending, "moving to another page puts it away");
+        // Settings → About, at the bottom of the page.
+        for _ in 0..40 {
+            s.step(
+                &mut app,
+                vec![
+                    Event::PointerMoved(pos2(900.0, 500.0)),
+                    Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Line,
+                        delta: vec2(0.0, -10.0),
+                        modifiers: Modifiers::NONE,
+                        phase: egui::TouchPhase::Move,
+                    },
+                ],
+            );
+        }
+        let img = s.settle(&mut app, 40);
+        s.save(img, "settings-about");
         app.go(&ctx, crate::app::Page::Dashboard);
 
         // The switch, mid-way and done.

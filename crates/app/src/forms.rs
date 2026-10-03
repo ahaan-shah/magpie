@@ -130,6 +130,10 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     }
     if close && closing.is_none() {
         crate::diag::crumb(format!("close modal {}", modal.name()));
+        // Read it (Got it, Esc or a click outside): the sidebar row goes.
+        if matches!(modal, Modal::WhatsNew) {
+            app.whats_new.dismiss(&mut app.store);
+        }
         app.modal_closing = Some(now);
     }
     app.modal = Some(modal);

@@ -546,35 +546,43 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             acts.push(Act::AutoUpdate(auto_update));
         }
         ui.add_space(10.0);
-        ui.horizontal(|ui| {
-            let (r, _) = ui.allocate_exact_size(vec2(40.0, 40.0), Sense::hover());
-            crate::app::logo(ui.painter(), r, &t);
-            ui.vertical(|ui| {
-                ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new(format!("Magpie {}", env!("CARGO_PKG_VERSION")))
-                            .font(theme::semibold(14.0))
-                            .color(t.text),
-                    );
-                    let link = ui
-                        .add(
-                            egui::Label::new(
-                                egui::RichText::new(format!("What's new {}", ph::ARROW_SQUARE_OUT))
-                                    .font(theme::medium(12.5))
-                                    .color(t.accent),
-                            )
-                            .sense(Sense::click()),
-                        )
-                        .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .on_hover_text("Open this version's release notes in your browser");
-                    crate::marks::record(|| "settings:whatsnew".into(), link.rect);
-                    if link.clicked() {
-                        acts.push(Act::ReleaseNotes);
-                    }
-                });
-                ui.label(w::subtle(&t, "Local-first personal finance. MIT licensed."));
-            });
-        });
+        // Logo, then two lines that sit within its height: the version
+        // (with a link to what's new in it) and what Magpie is.
+        let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 48.0), Sense::hover());
+        let logo = Rect::from_min_size(row.min, vec2(48.0, 48.0));
+        crate::app::logo(ui.painter(), logo, &t);
+        let x = logo.right() + 14.0;
+        let p = ui.painter();
+        let name = p.text(
+            pos2(x, logo.top() + 13.0),
+            Align2::LEFT_CENTER,
+            format!("Magpie {}", env!("CARGO_PKG_VERSION")),
+            theme::semibold(15.0),
+            t.text,
+        );
+        p.text(
+            pos2(x, logo.top() + 35.0),
+            Align2::LEFT_CENTER,
+            "Local-first personal finance. MIT licensed.",
+            theme::regular(13.5),
+            t.text2,
+        );
+        let label = format!("What's new  {}", ph::ARROW_SQUARE_OUT);
+        let galley = p.layout_no_wrap(label, theme::medium(12.5), t.accent);
+        let link = Rect::from_min_size(
+            pos2(name.right() + 12.0, name.center().y - galley.size().y / 2.0),
+            galley.size(),
+        );
+        let resp = ui
+            .interact(link.expand(3.0), Id::new("settings-whatsnew"), Sense::click())
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .on_hover_text("Open this version's release notes in your browser");
+        crate::marks::record(|| "settings:whatsnew".into(), link);
+        let c = if resp.hovered() { t.text } else { t.accent };
+        ui.painter().galley_with_override_text_color(link.min, galley, c);
+        if resp.clicked() {
+            acts.push(Act::ReleaseNotes);
+        }
     });
 
     let ctx = ui.ctx().clone();
