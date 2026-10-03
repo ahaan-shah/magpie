@@ -50,8 +50,9 @@ pub const THEMES: &[Theme] = &[
         text: hex(0xEDE6DC),
         text2: hex(0xB2A99D),
         text3: hex(0x7D7A76),
-        accent: hex(0xEE9B70),
-        on_accent: hex(0x1B140F),
+        // The logo's orange, with white like the bird on it.
+        accent: hex(0xE4814F),
+        on_accent: hex(0xFFFFFF),
         pos: hex(0x8DCB9C),
         neg: hex(0xF08B80),
         warn: hex(0xEBC27A),

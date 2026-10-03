@@ -1192,8 +1192,11 @@ fn basic_stills() {
         s.click(&mut app, "onb:Basic");
         s.settle(&mut app, 40);
         s.click(&mut app, "onb:begin");
-        let img = s.settle(&mut app, 24);
-        s.save(img, "onboarding-begin-mid");
+        // The fly-in, frame by frame (60 fps).
+        for (i, frames) in [8, 8, 8, 8, 8, 8].into_iter().enumerate() {
+            let img = s.settle(&mut app, frames);
+            s.save(img, &format!("onboarding-begin-{i}"));
+        }
         let img = s.settle(&mut app, 90);
         assert!(app.onboarding.is_none(), "Begin opened the app");
         assert!(app.store.settings().basic, "chose Basic");

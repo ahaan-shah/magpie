@@ -344,6 +344,8 @@ impl App {
         self.modal_closing = None;
         self.palette.open = false;
         self.onboarding = None;
+        self.intro_at = None;
+        motion::zoom_app(ctx, 1.0);
         if self.panics > 1 {
             // Something on this page keeps failing; get somewhere safe.
             self.page = Page::Dashboard;
@@ -1201,8 +1203,12 @@ impl App {
         self.drop_overlay(&ctx);
         self.mode_fade(&ctx, &t);
         if let Some(at) = self.intro_at {
-            let k = motion::appear(&ctx, at, 0.0, 0.5);
-            if k >= 1.0 {
+            // Onboarding just flew away: the app grows into place from
+            // slightly behind as it fades in.
+            let zoom = motion::appear(&ctx, at, 0.0, 0.65);
+            motion::zoom_app(&ctx, 0.9 + 0.1 * zoom);
+            let k = motion::appear(&ctx, at, 0.0, 0.45);
+            if zoom >= 1.0 {
                 self.intro_at = None;
             } else {
                 // Above the panels, below modals and toasts.

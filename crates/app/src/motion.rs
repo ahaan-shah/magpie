@@ -102,6 +102,14 @@ pub fn tween(ctx: &Context, id: Id, target: f32, dur: f32) -> f32 {
     value
 }
 
+/// Zooms the whole window's base layer (where the panels live) by `scale`
+/// about its centre; 1.0 puts it back. For the hand-over from onboarding.
+pub fn zoom_app(ctx: &Context, scale: f32) {
+    let c = ctx.content_rect().center().to_vec2();
+    let t = egui::emath::TSTransform::new(c * (1.0 - scale), scale);
+    ctx.set_transform_layer(egui::LayerId::background(), t);
+}
+
 /// Forgets a [`tween`]/[`toggle`]'s state, so its next value jumps straight
 /// to the target (for changes made out of sight).
 pub fn snap(ctx: &Context, id: Id) {

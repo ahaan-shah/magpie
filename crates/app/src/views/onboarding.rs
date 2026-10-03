@@ -29,8 +29,8 @@ pub struct State {
 /// Used when the account name is left blank.
 const DEFAULT_ACCOUNT: &str = "Current account";
 
-/// How long the welcome takes to fade out after Begin.
-const LEAVE: f32 = 0.28;
+/// How long the welcome takes to fly away after Begin.
+const LEAVE: f32 = 0.3;
 
 impl State {
     pub fn new() -> State {
@@ -63,7 +63,11 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         .leaving_at
         .map(|at| motion::ease_out(((now - at) as f32 / LEAVE).clamp(0.0, 1.0)))
         .unwrap_or(0.0);
-    if st.leaving_at.is_some() {
+    if let Some(at) = st.leaving_at {
+        // Begin flies you in: the welcome grows towards you as it fades,
+        // speeding up, and the app then settles in from just behind it.
+        let p = ((now - at) as f32 / LEAVE).clamp(0.0, 1.0);
+        motion::zoom_app(&ctx, 1.0 + 0.16 * p * p);
         ctx.request_repaint();
     }
     // The mode step slides in over the first: 0 = details, 1 = mode.
@@ -396,6 +400,7 @@ fn finish(app: &mut App, ctx: &egui::Context) {
         Err(e) => {
             app.toasts.error(e.to_string());
             st.leaving_at = None;
+            motion::zoom_app(ctx, 1.0);
             app.onboarding = Some(st);
             return;
         }
