@@ -6,7 +6,7 @@ your line when the work is merged.
 
 | Topic | Branch | Areas / files | Status |
 |---|---|---|---|
-| Paybacks: money in that offsets a budget (0.2.2) | `agent/payback` | forms.rs (txn form), views/basic_ledger.rs, core budget tests | in progress |
+| _(none active)_ | | | |
 
 ## Reserved
 
