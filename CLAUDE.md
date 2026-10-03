@@ -240,6 +240,9 @@ from the README until they're actually published. The PKGBUILD and cask in
 
 ## Where things stand
 
+- **On `main`, not yet released (next: 0.2.3):** What's new after updates.
+  Its 0.2.3 notes in `whatsnew::RELEASES` currently list only that; add
+  each new 0.2.3 feature as a point there (and in CHANGELOG → Unreleased).
 - **Released:** up to v0.2.2 (paybacks). v0.2.1 brought Basic mode, the
   Magpie themes and database migration v2 for account card looks. v0.2.0 was the first release with
   Windows (0.1.5 was folded into 0.1.6). The repo was private until 0.1.6, then made public.

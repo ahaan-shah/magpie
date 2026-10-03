@@ -6,7 +6,7 @@ your line when the work is merged.
 
 | Topic | Branch | Areas / files | Status |
 |---|---|---|---|
-| What's new after updates (0.2.3) | `agent/whats-new` | new whatsnew.rs, app.rs sidebar + go(), forms.rs (modal), settings About, updater restart, store Settings, demo | in progress |
+| _(none active)_ | | | |
 
 ## Reserved
 
