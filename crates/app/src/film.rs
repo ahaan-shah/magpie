@@ -996,6 +996,7 @@ fn stills() {
 /// Drives the app headlessly frame by frame and saves PNGs, for the stills.
 struct Shots {
     ctx: Context,
+    size: Vec2,
     renderer: WgpuTestRenderer,
     t: f64,
     out: String,
@@ -1006,7 +1007,7 @@ impl Shots {
     fn step(&mut self, app: &mut App, events: Vec<Event>) -> image::RgbaImage {
         self.t += 1.0 / 60.0;
         let mut raw = RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, self.size)),
             time: Some(self.t),
             events,
             ..Default::default()
@@ -1027,7 +1028,8 @@ impl Shots {
     fn settle(&mut self, app: &mut App, frames: usize) -> image::RgbaImage {
         let mut img = None;
         for _ in 0..frames {
-            img = Some(self.step(app, vec![Event::PointerMoved(pos2(1270.0, 790.0))]));
+            let corner = self.size.to_pos2() - vec2(10.0, 10.0);
+            img = Some(self.step(app, vec![Event::PointerMoved(corner)]));
         }
         img.expect("at least one frame")
     }
@@ -1109,6 +1111,7 @@ fn basic_stills() {
         let mut app = App::with_context(&ctx, None, store);
         let mut s = Shots {
             ctx: ctx.clone(),
+            size: vec2(1280.0, 800.0),
             renderer: WgpuTestRenderer::new(),
             t: 0.0,
             out: out.clone(),
@@ -1179,6 +1182,26 @@ fn basic_stills() {
         s.ctx = ctx.clone();
         s.renderer = WgpuTestRenderer::new();
         s.settle(&mut app, 60);
+        // The currency list, at the usual size and the smallest window.
+        for size in [vec2(1280.0, 800.0), vec2(940.0, 620.0)] {
+            s.size = size;
+            s.settle(&mut app, 20);
+            s.click(&mut app, "picker:\"onb-cur\"");
+            let img = s.settle(&mut app, 30);
+            s.save(img, &format!("onboarding-currency-{}", size.x as u32));
+            s.step(
+                &mut app,
+                vec![Event::Key {
+                    key: Key::Escape,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: Modifiers::NONE,
+                }],
+            );
+        }
+        s.size = vec2(1280.0, 800.0);
+        s.settle(&mut app, 30);
         s.click(&mut app, "onb:start");
         let img = s.settle(&mut app, 12);
         s.save(img, "onboarding-mode-mid");

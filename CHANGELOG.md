@@ -29,6 +29,8 @@ All notable changes to Magpie are documented here. The format follows
   nearly invisible in most themes. Buttons and list rows hover more clearly
   too.
 - "New category…" in Budgets → Add budget no longer gets cut off.
+- Dropdowns open just below their field instead of overlapping it, and
+  always fit in the window (they scroll when there isn't room).
 - `install.sh --uninstall` (`curl … | sh -s -- --uninstall`) removes Magpie
   on Linux and macOS and keeps your data.
 

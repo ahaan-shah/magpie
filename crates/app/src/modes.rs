@@ -44,8 +44,9 @@ fn rgb(v: u32) -> Color32 {
 /// Draws a tiny Magpie window. `advanced` runs from 0 (Basic) to 1
 /// (Advanced); in between, the extra pages fold in and the two layouts
 /// crossfade. `round` scales the window's corner radius (onboarding takes it
-/// to 0 as the preview grows into the real, full-window app).
-pub fn paint_preview(p: &Painter, t: &Theme, rect: Rect, advanced: f32, round: f32) {
+/// to 0 as the preview grows into the real, full-window app). `inside` fades
+/// everything but the window and its sidebar.
+pub fn paint_preview(p: &Painter, t: &Theme, rect: Rect, advanced: f32, round: f32, inside: f32) {
     let k = advanced.clamp(0.0, 1.0);
     let s = rect.width() / 420.0; // everything is drawn at 420 wide, then scaled
     let rad = |v: f32| CornerRadius::same((v * s).round().clamp(1.0, 255.0) as u8);
@@ -73,6 +74,12 @@ pub fn paint_preview(p: &Painter, t: &Theme, rect: Rect, advanced: f32, round: f
         t.sidebar,
     );
     p.vline(side.right(), side.y_range(), Stroke::new(1.0, t.border));
+    if inside <= 0.001 {
+        return;
+    }
+    let mut p = p.clone();
+    p.multiply_opacity(inside);
+    let p = &p;
     let logo = Rect::from_min_size(side.min + vec2(12.0, 12.0) * s, vec2(16.0, 16.0) * s);
     p.rect_filled(logo, rad(5.0), Color32::from_rgb(0xE4, 0x81, 0x4F));
     bar(

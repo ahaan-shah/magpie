@@ -1203,16 +1203,16 @@ impl App {
         self.drop_overlay(&ctx);
         self.mode_fade(&ctx, &t);
         if let Some((at, advanced)) = self.intro_at {
-            // Onboarding's preview has grown to fill the window; it melts
-            // away as the real app's cards rise in beneath it.
-            let k = motion::appear(&ctx, at, 0.0, 0.3);
+            // Onboarding's preview has grown into an empty, app-shaped
+            // window; the real app fades in over it, like a mode switch.
+            let k = motion::appear(&ctx, at, 0.0, 0.34);
             if k >= 1.0 {
                 self.intro_at = None;
             } else {
                 // Above the panels, below modals and toasts.
                 let mut p = ctx.layer_painter(egui::LayerId::new(egui::Order::Middle, Id::new("intro")));
                 p.set_opacity(1.0 - k);
-                crate::modes::paint_preview(&p, &t, ctx.content_rect(), advanced, 0.0);
+                crate::modes::paint_preview(&p, &t, ctx.content_rect(), advanced, 0.0, 0.0);
             }
         }
         if let Some(a) = self.toasts.show(&ctx, &t)

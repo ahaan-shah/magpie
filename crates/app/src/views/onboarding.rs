@@ -113,7 +113,10 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         let g = motion::ease_in_out((e / EXPAND).clamp(0.0, 1.0));
         let r = Rect::from_min_max(from.min.lerp(to.min, g), from.max.lerp(to.max, g));
         let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Middle, Id::new("onb-expand")));
-        modes::paint_preview(&p, &t, r, if st.basic { 0.0 } else { 1.0 }, 1.0 - g);
+        // What's drawn inside fades as it grows, so it lands as an empty
+        // window the shape of the app, which the app then fades into.
+        let inside = 1.0 - motion::ease_out((e / (EXPAND * 0.6)).clamp(0.0, 1.0));
+        modes::paint_preview(&p, &t, r, if st.basic { 0.0 } else { 1.0 }, 1.0 - g, inside);
     }
     if begin && let Some(st) = app.onboarding.as_mut() {
         st.leaving_at.get_or_insert(now);
@@ -127,7 +130,10 @@ pub fn show(app: &mut App, ui: &mut Ui) {
 /// Step 1: currency, first account, and how to begin.
 fn details(ui: &mut Ui, t: &Theme, st: &mut State, full: Rect, dy: f32) {
     let card_w = 480.0;
-    let rect = Rect::from_center_size(full.center() + vec2(0.0, dy), vec2(card_w, 560.0));
+    let mut rect = Rect::from_center_size(full.center() + vec2(0.0, dy), vec2(card_w, 540.0));
+    if rect.top() < full.top() + 16.0 {
+        rect = rect.translate(vec2(0.0, full.top() + 16.0 - rect.top()));
+    }
     let mut ui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
     w::card_frame(t)
         .inner_margin(egui::Margin::same(32))
@@ -142,18 +148,12 @@ fn details(ui: &mut Ui, t: &Theme, st: &mut State, full: Rect, dy: f32) {
                         .font(theme::display(28.0))
                         .color(t.text),
                 );
-                ui.add_space(6.0);
+                ui.add_space(12.0);
                 ui.label(
                     egui::RichText::new("A calm nest for your money.")
                         .font(theme::regular(17.0))
                         .italics()
                         .color(t.text2),
-                );
-                ui.add_space(2.0);
-                ui.label(
-                    egui::RichText::new("All your data, on your computer.")
-                        .font(theme::regular(13.5))
-                        .color(t.text3),
                 );
             });
             ui.add_space(22.0);
@@ -322,7 +322,7 @@ fn preview(ui: &Ui, t: &Theme, area: Rect, basic: bool) -> Rect {
     let pw = area.width().min((area.height() - caption_h) * 1.5);
     let pr = Rect::from_min_size(pos2(area.center().x - pw / 2.0, area.top()), vec2(pw, pw / 1.5));
     let p = ui.painter();
-    modes::paint_preview(p, t, pr, k, 1.0);
+    modes::paint_preview(p, t, pr, k, 1.0, 1.0);
     let y = pr.bottom() + 20.0;
     // One caption fades out before the other fades in, so they never overlap.
     let out_in = [(1.0 - 2.0 * k).max(0.0), (2.0 * k - 1.0).max(0.0)];

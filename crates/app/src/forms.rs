@@ -896,7 +896,8 @@ impl AccountForm {
 
 pub fn currency_picker(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, cur: &mut Cur, width: f32) {
     let label = format!("{}  {}", cur.code(), cur.info().map(|i| i.name).unwrap_or(""));
-    w::dropdown(ui, id, label, width, |ui| {
+    let key = format!("picker:{id:?}");
+    let resp = w::dropdown(ui, id, label, width, |ui| {
         for info in money::CURRENCIES {
             if let Some(c) = Cur::new(info.code) {
                 w::option_value(
@@ -908,6 +909,7 @@ pub fn currency_picker(ui: &mut Ui, id: impl std::hash::Hash + std::fmt::Debug, 
             }
         }
     });
+    crate::marks::record(|| key, resp.response.rect);
 }
 
 pub fn color_row(ui: &mut Ui, t: &Theme, color: &mut u32) {

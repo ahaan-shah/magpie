@@ -615,14 +615,69 @@ pub fn dropdown<R>(
     width: f32,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<Option<R>> {
-    egui::ComboBox::from_id_salt(id)
-        .selected_text(selected)
+    let v = ui.visuals().clone();
+    let id = ui.make_persistent_id(id);
+    let popup_id = id.with("popup");
+    let open = egui::Popup::is_id_open(ui.ctx(), popup_id);
+    let pad = ui.spacing().button_padding;
+    let galley = selected.into().into_galley(
+        ui,
+        Some(egui::TextWrapMode::Truncate),
+        width - pad.x * 2.0 - 22.0,
+        egui::TextStyle::Button,
+    );
+    let height = (galley.size().y + pad.y * 2.0).max(ui.spacing().interact_size.y);
+    let (rect, resp) = ui.allocate_exact_size(vec2(width, height), Sense::click());
+    if ui.is_rect_visible(rect) {
+        let hover = motion::toggle(ui.ctx(), id.with("h"), resp.hovered(), motion::MICRO);
+        let w = &v.widgets;
+        let edge = if open {
+            w.active.bg_stroke.color
+        } else {
+            motion::lerp_color(w.inactive.bg_stroke.color, w.hovered.bg_stroke.color, hover)
+        };
+        let p = ui.painter();
+        p.rect(
+            rect,
+            w.inactive.corner_radius,
+            w.inactive.weak_bg_fill,
+            Stroke::new(1.0, edge),
+            StrokeKind::Inside,
+        );
+        let text_pos = egui::pos2(rect.left() + pad.x, rect.center().y - galley.size().y / 2.0);
+        p.galley(text_pos, galley, v.text_color());
+        p.text(
+            egui::pos2(rect.right() - pad.x, rect.center().y),
+            Align2::RIGHT_CENTER,
+            if open { ph::CARET_UP } else { ph::CARET_DOWN },
+            theme::regular(13.0),
+            v.widgets.inactive.fg_stroke.color,
+        );
+    }
+    let resp = resp.on_hover_cursor(egui::CursorIcon::PointingHand);
+    // The list opens a little apart from the field and never runs off the
+    // window: it takes the roomier side and scrolls within what's there.
+    let screen = ui.ctx().content_rect();
+    let gap = 6.0;
+    let room = (screen.bottom() - rect.bottom()).max(rect.top() - screen.top()) - gap - 40.0;
+    let max_h = room.clamp(96.0, 320.0);
+    let inner = egui::Popup::menu(&resp)
+        .id(popup_id)
         .width(width)
-        .height(320.0)
-        .show_ui(ui, |ui| {
-            ui.spacing_mut().item_spacing.y = 2.0;
-            add(ui)
+        .gap(gap)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClick)
+        .show(|ui| {
+            ui.set_min_width(ui.available_width());
+            scroll_area()
+                .max_height(max_h)
+                .show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    add(ui)
+                })
+                .inner
         })
+        .map(|r| r.inner);
+    egui::InnerResponse { inner, response: resp }
 }
 
 /// Space kept clear on the right of menu rows so the floating scrollbar never
