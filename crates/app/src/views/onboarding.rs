@@ -22,15 +22,19 @@ pub struct State {
     /// step shows until Begin.
     choice: Option<Choice>,
     basic: bool,
-    /// Set by Begin: the welcome fades out, then the app opens.
+    /// Set by Begin: the preview grows into the app (see `EXPAND`).
     leaving_at: Option<f64>,
+    /// Where the preview sits on the card, for it to grow from.
+    preview_rect: Option<Rect>,
 }
 
 /// Used when the account name is left blank.
 const DEFAULT_ACCOUNT: &str = "Current account";
 
-/// How long the welcome takes to fly away after Begin.
-const LEAVE: f32 = 0.3;
+/// How long the chosen preview takes to grow into the whole window after
+/// Begin. The rest of the card is gone in the first `CARD_OUT` of it.
+const EXPAND: f32 = 0.6;
+const CARD_OUT: f32 = 0.2;
 
 impl State {
     pub fn new() -> State {
@@ -42,6 +46,7 @@ impl State {
             choice: None,
             basic: true,
             leaving_at: None,
+            preview_rect: None,
         }
     }
 }
@@ -59,15 +64,11 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     let now = ctx.input(|i| i.time);
     let Some(st) = app.onboarding.as_mut() else { return };
     let shown = *st.shown_at.get_or_insert(now);
-    let leave = st
-        .leaving_at
-        .map(|at| motion::ease_out(((now - at) as f32 / LEAVE).clamp(0.0, 1.0)))
-        .unwrap_or(0.0);
-    if let Some(at) = st.leaving_at {
-        // Begin flies you in: the welcome grows towards you as it fades,
-        // speeding up, and the app then settles in from just behind it.
-        let p = ((now - at) as f32 / LEAVE).clamp(0.0, 1.0);
-        motion::zoom_app(&ctx, 1.0 + 0.16 * p * p);
+    // Begin: the card falls away around the preview, which grows to fill
+    // the window and becomes the app.
+    let since = st.leaving_at.map(|at| (now - at) as f32);
+    let card = since.map_or(1.0, |e| 1.0 - motion::ease_out(e / CARD_OUT));
+    if since.is_some() {
         ctx.request_repaint();
     }
     // The mode step slides in over the first: 0 = details, 1 = mode.
@@ -77,14 +78,13 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         .frame(egui::Frame::new().fill(t.bg))
         .show(ui, |ui| {
             let full = ui.max_rect();
-            ui.set_opacity(1.0 - leave);
             // Soft accent glow behind the card.
             let glow = motion::appear(&ctx, shown, 0.0, 1.2);
             w::radial_glow(
                 ui.painter(),
                 full.center() - vec2(0.0, 120.0),
                 520.0 + 200.0 * step,
-                motion::with_alpha(t.accent, 0.16 * glow),
+                motion::with_alpha(t.accent, 0.16 * glow * card),
             );
             let p = motion::appear(&ctx, shown, 0.1, 0.6);
             if step < 0.999 {
@@ -97,7 +97,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             }
             if step > 0.001 {
                 let mut c = ui.new_child(egui::UiBuilder::new().max_rect(full));
-                c.set_opacity(step);
+                c.set_opacity(step * card);
                 if st.choice.is_none() || st.leaving_at.is_some() {
                     c.disable();
                 }
@@ -105,14 +105,20 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             }
         });
 
+    if let (Some(e), Some(st)) = (since, app.onboarding.as_ref()) {
+        let from = st
+            .preview_rect
+            .unwrap_or_else(|| Rect::from_center_size(ctx.content_rect().center(), vec2(420.0, 280.0)));
+        let to = ctx.content_rect();
+        let g = motion::ease_in_out((e / EXPAND).clamp(0.0, 1.0));
+        let r = Rect::from_min_max(from.min.lerp(to.min, g), from.max.lerp(to.max, g));
+        let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Middle, Id::new("onb-expand")));
+        modes::paint_preview(&p, &t, r, if st.basic { 0.0 } else { 1.0 }, 1.0 - g);
+    }
     if begin && let Some(st) = app.onboarding.as_mut() {
         st.leaving_at.get_or_insert(now);
     }
-    let done = app
-        .onboarding
-        .as_ref()
-        .and_then(|st| st.leaving_at)
-        .is_some_and(|at| now - at >= LEAVE as f64);
+    let done = since.is_some_and(|e| e >= EXPAND);
     if done {
         finish(app, &ctx);
     }
@@ -265,7 +271,11 @@ fn mode_step(ui: &mut Ui, t: &Theme, st: &mut State, full: Rect, dy: f32) -> boo
                 });
                 ui.add_space(gap - ui.spacing().item_spacing.x);
                 let (area, _) = ui.allocate_exact_size(vec2(right_w, inner.y), Sense::hover());
-                preview(ui, t, area, st.basic);
+                // Once Begin is pressed the preview is drawn growing, above
+                // the card (see `show`).
+                if st.leaving_at.is_none() {
+                    st.preview_rect = Some(preview(ui, t, area, st.basic));
+                }
             });
         });
     begin
@@ -306,13 +316,13 @@ fn option_row(ui: &mut Ui, t: &Theme, basic: bool, selected: bool, width: f32) -
 
 /// The miniature app plus the chosen mode's tagline, both crossfading as
 /// the choice changes.
-fn preview(ui: &Ui, t: &Theme, area: Rect, basic: bool) {
+fn preview(ui: &Ui, t: &Theme, area: Rect, basic: bool) -> Rect {
     let k = motion::toggle(ui.ctx(), Id::new("onb-preview"), !basic, motion::EMPHASIS);
     let caption_h = 84.0;
     let pw = area.width().min((area.height() - caption_h) * 1.5);
     let pr = Rect::from_min_size(pos2(area.center().x - pw / 2.0, area.top()), vec2(pw, pw / 1.5));
     let p = ui.painter();
-    modes::paint_preview(p, t, pr, k);
+    modes::paint_preview(p, t, pr, k, 1.0);
     let y = pr.bottom() + 20.0;
     // One caption fades out before the other fades in, so they never overlap.
     let out_in = [(1.0 - 2.0 * k).max(0.0), (2.0 * k - 1.0).max(0.0)];
@@ -336,10 +346,11 @@ fn preview(ui: &Ui, t: &Theme, area: Rect, basic: bool) {
         );
         p.galley(pos2(pr.left(), y + 30.0 + dy), g, t.text2);
     }
+    pr
 }
 
 /// Begin: sets everything up the way step 1 asked, in the chosen mode, and
-/// opens the app (which fades in from here).
+/// opens the app under the full-window preview, which then melts away.
 fn finish(app: &mut App, ctx: &egui::Context) {
     let Some(mut st) = app.onboarding.take() else { return };
     let Some(choice) = st.choice else {
@@ -400,13 +411,12 @@ fn finish(app: &mut App, ctx: &egui::Context) {
         Err(e) => {
             app.toasts.error(e.to_string());
             st.leaving_at = None;
-            motion::zoom_app(ctx, 1.0);
             app.onboarding = Some(st);
             return;
         }
     }
     let now = ctx.input(|i| i.time);
     app.shown_at = now;
-    app.intro_at = Some(now);
+    app.intro_at = Some((now, if basic { 0.0 } else { 1.0 }));
     app.page = crate::app::Page::Dashboard;
 }

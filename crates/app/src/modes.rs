@@ -42,27 +42,31 @@ fn rgb(v: u32) -> Color32 {
 }
 
 /// Draws a tiny Magpie window. `advanced` runs from 0 (Basic) to 1
-/// (Advanced); in between, the extra sidebar pages fold in and the two
-/// page layouts crossfade, matching what the real switch does.
-pub fn paint_preview(p: &Painter, t: &Theme, rect: Rect, advanced: f32) {
+/// (Advanced); in between, the extra pages fold in and the two layouts
+/// crossfade. `round` scales the window's corner radius (onboarding takes it
+/// to 0 as the preview grows into the real, full-window app).
+pub fn paint_preview(p: &Painter, t: &Theme, rect: Rect, advanced: f32, round: f32) {
     let k = advanced.clamp(0.0, 1.0);
     let s = rect.width() / 420.0; // everything is drawn at 420 wide, then scaled
     let rad = |v: f32| CornerRadius::same((v * s).round().clamp(1.0, 255.0) as u8);
+    let corner = |v: f32| (v * s.min(1.5) * round).round().clamp(0.0, 255.0) as u8;
     p.rect(
         rect,
-        rad(14.0),
+        CornerRadius::same(corner(14.0)),
         t.bg,
         Stroke::new(1.0, t.border),
         egui::StrokeKind::Inside,
     );
 
     // Sidebar
-    let side = Rect::from_min_max(rect.min, pos2(rect.left() + 92.0 * s, rect.bottom()));
+    // Never wider than the real sidebar, so a full-window preview lines up
+    // with the app it turns into.
+    let side = Rect::from_min_max(rect.min, pos2(rect.left() + (92.0 * s).min(236.0), rect.bottom()));
     p.rect_filled(
         side.shrink(1.0),
         CornerRadius {
-            nw: rad(13.0).nw,
-            sw: rad(13.0).sw,
+            nw: corner(13.0),
+            sw: corner(13.0),
             ne: 0,
             se: 0,
         },

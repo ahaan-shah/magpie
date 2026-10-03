@@ -134,8 +134,9 @@ pub struct App {
     pub goals: views::goals::State,
     pub settings: views::settings::State,
     pub onboarding: Option<views::onboarding::State>,
-    /// When onboarding handed over: the app fades in from the background.
-    pub intro_at: Option<f64>,
+    /// When onboarding handed over, and the preview (0 Basic, 1 Advanced)
+    /// that grew to fill the window: it dissolves into the real app.
+    pub intro_at: Option<(f64, f32)>,
     /// A mode switch in progress: when it started, and to which mode.
     mode_fade: Option<(f64, bool)>,
     pub receipts: ReceiptCache,
@@ -345,7 +346,6 @@ impl App {
         self.palette.open = false;
         self.onboarding = None;
         self.intro_at = None;
-        motion::zoom_app(ctx, 1.0);
         if self.panics > 1 {
             // Something on this page keeps failing; get somewhere safe.
             self.page = Page::Dashboard;
@@ -1202,18 +1202,17 @@ impl App {
         crate::palette::show(self, &ctx);
         self.drop_overlay(&ctx);
         self.mode_fade(&ctx, &t);
-        if let Some(at) = self.intro_at {
-            // Onboarding just flew away: the app grows into place from
-            // slightly behind as it fades in.
-            let zoom = motion::appear(&ctx, at, 0.0, 0.65);
-            motion::zoom_app(&ctx, 0.9 + 0.1 * zoom);
-            let k = motion::appear(&ctx, at, 0.0, 0.45);
-            if zoom >= 1.0 {
+        if let Some((at, advanced)) = self.intro_at {
+            // Onboarding's preview has grown to fill the window; it melts
+            // away as the real app's cards rise in beneath it.
+            let k = motion::appear(&ctx, at, 0.0, 0.3);
+            if k >= 1.0 {
                 self.intro_at = None;
             } else {
                 // Above the panels, below modals and toasts.
-                ctx.layer_painter(egui::LayerId::new(egui::Order::Middle, Id::new("intro")))
-                    .rect_filled(ctx.content_rect(), 0.0, motion::with_alpha(t.bg, 1.0 - k));
+                let mut p = ctx.layer_painter(egui::LayerId::new(egui::Order::Middle, Id::new("intro")));
+                p.set_opacity(1.0 - k);
+                crate::modes::paint_preview(&p, &t, ctx.content_rect(), advanced, 0.0);
             }
         }
         if let Some(a) = self.toasts.show(&ctx, &t)

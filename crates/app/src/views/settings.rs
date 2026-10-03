@@ -679,7 +679,7 @@ fn mode_tile(ui: &mut Ui, t: &Theme, basic: bool, selected: bool, width: f32) ->
     let inner = r.shrink(14.0);
     let pw = (inner.height() * 1.5).min(inner.width() * 0.5);
     let pr = Rect::from_min_size(inner.min, vec2(pw, pw / 1.5));
-    crate::modes::paint_preview(p, t, pr, if basic { 0.0 } else { 1.0 });
+    crate::modes::paint_preview(p, t, pr, if basic { 0.0 } else { 1.0 }, 1.0);
     let m = crate::modes::mode(basic);
     let x = pr.right() + 16.0;
     let text_w = inner.right() - x;
