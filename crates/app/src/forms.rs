@@ -286,6 +286,10 @@ pub struct TxnForm {
     error: Option<String>,
     first_frame: bool,
     auto_category: bool,
+    /// Money in that pays you back for something (a friend's share of the
+    /// tickets): it's filed under the spending category, so it comes off
+    /// that budget instead of counting as income.
+    payback: bool,
 }
 
 impl TxnForm {
@@ -318,6 +322,7 @@ impl TxnForm {
             error: None,
             first_frame: true,
             auto_category: true,
+            payback: false,
         }
     }
 
@@ -330,6 +335,19 @@ impl TxnForm {
             f.amount.clear();
             f.mode = 0;
         }
+        f
+    }
+
+    /// A payback filled in, for the stills.
+    #[cfg(test)]
+    pub fn payback_example(store: &Store, today: Date, category: RowId, amount: &str, payee: &str) -> TxnForm {
+        let mut f = TxnForm::new(store, today);
+        f.mode = 1;
+        f.payback = true;
+        f.category = Some(category);
+        f.amount = amount.into();
+        f.payee = payee.into();
+        f.first_frame = false;
         f
     }
 
@@ -351,6 +369,9 @@ impl TxnForm {
         f.tags = t.tags.iter().map(|x| format!("#{x}")).collect::<Vec<_>>().join(" ");
         f.cleared = t.cleared;
         f.auto_category = false;
+        f.payback = t.amount > 0
+            && !t.is_transfer()
+            && t.category.and_then(|c| store.category(c)).map(|c| c.kind) == Some(CategoryKind::Expense);
         f.mode = if t.is_transfer() {
             2
         } else if t.amount > 0 {
@@ -408,6 +429,31 @@ impl TxnForm {
             self.first_frame = false;
         }
         ui.add_space(10.0);
+        if self.mode == 1 {
+            let was = self.payback;
+            w::toggle_row(ui, t, &mut self.payback, "Someone's paying me back");
+            if self.payback != was {
+                // The category list changes between income and spending.
+                self.category = None;
+                self.auto_category = true;
+            }
+            ui.label(w::faint(
+                t,
+                if self.payback {
+                    "Comes off a budget instead of counting as income."
+                } else {
+                    "Paid back for something? Take it off a budget instead."
+                },
+            ));
+            ui.add_space(10.0);
+        }
+        // What the category list offers: a payback goes against spending.
+        let kind = if self.mode == 1 && !self.payback {
+            CategoryKind::Income
+        } else {
+            CategoryKind::Expense
+        };
+        let fits = |c: Option<RowId>| c.and_then(|c| app.store.category(c)).is_none_or(|c| c.kind == kind);
 
         if self.mode == 2 {
             let store = &app.store;
@@ -453,12 +499,22 @@ impl TxnForm {
             self.date = d;
         } else {
             // Payee with autocomplete from history.
-            w::field_label(ui, t, if basic { "For what" } else { "Payee" });
+            let payback = self.mode == 1 && self.payback;
+            w::field_label(
+                ui,
+                t,
+                match (payback, basic) {
+                    (true, _) => "Who paid you back",
+                    (false, true) => "For what",
+                    (false, false) => "Payee",
+                },
+            );
             let payee_id = Id::new("txn-payee");
-            let hint = match (basic, self.mode) {
-                (false, _) => "Who was it?",
-                (true, 1) => "Salary, a refund, a gift…",
-                (true, _) => "Coffee, rent, groceries…",
+            let hint = match (payback, basic, self.mode) {
+                (true, _, _) => "A friend, for the movie tickets…",
+                (false, false, _) => "Who was it?",
+                (false, true, 1) => "Salary, a refund, a gift…",
+                (false, true, _) => "Coffee, rent, groceries…",
             };
             let r = w::text_field(ui, t, payee_id, &mut self.payee, hint, ui.available_width());
             let payees = app
@@ -486,7 +542,7 @@ impl TxnForm {
                                 );
                                 if resp.clicked() || resp.is_pointer_button_down_on() {
                                     self.payee = p.name.clone();
-                                    if self.auto_category {
+                                    if self.auto_category && fits(p.category) {
                                         self.category = p.category;
                                     }
                                 }
@@ -497,17 +553,14 @@ impl TxnForm {
             if r.changed()
                 && self.auto_category
                 && let Some(p) = payees.iter().find(|p| p.name.to_lowercase() == q)
+                && fits(p.category)
             {
                 self.category = p.category;
             }
             ui.add_space(8.0);
             let store = &app.store;
             let before = self.category;
-            let kind = if self.mode == 1 {
-                CategoryKind::Income
-            } else {
-                CategoryKind::Expense
-            };
+            let cat_label = if payback { "Comes off" } else { "Category" };
             if basic {
                 // Category and date; the account only when there's a choice
                 // (it defaults to the first one).
@@ -515,7 +568,7 @@ impl TxnForm {
                 two(
                     ui,
                     |ui, wd| {
-                        w::field_label(ui, t, "Category");
+                        w::field_label(ui, t, cat_label);
                         category_picker(ui, t, store, "txn-cat", &mut self.category, wd, Some(kind));
                     },
                     |ui, wd| {
@@ -524,6 +577,9 @@ impl TxnForm {
                     },
                 );
                 self.date = d;
+                if payback {
+                    self.payback_note(store, ui, t);
+                }
                 if store.active_accounts().nth(1).is_some() {
                     ui.add_space(8.0);
                     w::field_label(ui, t, "Account");
@@ -536,7 +592,7 @@ impl TxnForm {
                 two(
                     ui,
                     |ui, wd| {
-                        w::field_label(ui, t, "Category");
+                        w::field_label(ui, t, cat_label);
                         category_picker(ui, t, store, "txn-cat", &mut self.category, wd, Some(kind));
                     },
                     |ui, wd| {
@@ -546,6 +602,9 @@ impl TxnForm {
                 );
                 if self.category != before {
                     self.auto_category = false;
+                }
+                if payback {
+                    self.payback_note(store, ui, t);
                 }
                 ui.add_space(8.0);
                 let mut d = self.date;
@@ -623,6 +682,51 @@ impl TxnForm {
                 Outcome::Keep
             }
         }
+    }
+
+    /// For a payback: what it does to that category this month, e.g.
+    /// "Entertainment spent in Oct: ₹1,000 → ₹500 of ₹2,000".
+    fn payback_note(&self, store: &Store, ui: &mut Ui, t: &Theme) {
+        let Some(cat) = self.category.and_then(|c| store.category(c)) else {
+            return;
+        };
+        let base = store.base();
+        let m = magpie_core::Month::of(self.date);
+        let mut spent = analytics::category_spent_map(store, m)
+            .get(&cat.id)
+            .copied()
+            .unwrap_or(0);
+        // When editing, leave this transaction's own effect out of "before".
+        if let Some(old) = self.editing.and_then(|id| store.txn(id))
+            && old.category == Some(cat.id)
+            && magpie_core::Month::of(old.date) == m
+        {
+            spent -= analytics::flow(store, old).1;
+        }
+        let cur = store.account_cur(self.account);
+        let amt = money::parse(&self.amount, cur)
+            .map(|v| store.convert(v.abs(), cur, base))
+            .unwrap_or(0);
+        let budget = magpie_core::budget::month_budget(store, m)
+            .into_iter()
+            .find(|l| l.category == cat.id)
+            .map(|l| l.available());
+        let mut text = format!(
+            "{} spent in {}: {} → {}",
+            cat.name,
+            m.short(),
+            w::fmt_money(spent.max(0), base),
+            w::fmt_money((spent - amt).max(0), base)
+        );
+        if let Some(b) = budget {
+            text.push_str(&format!(" of {}", w::fmt_money(b, base)));
+        }
+        ui.add_space(6.0);
+        ui.label(
+            egui::RichText::new(format!("{}  {text}", ph::ARROW_BEND_DOWN_LEFT))
+                .font(theme::regular(12.5))
+                .color(t.pos),
+        );
     }
 
     fn save(&mut self, app: &mut App) -> Result<&'static str, String> {

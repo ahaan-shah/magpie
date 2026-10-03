@@ -1159,6 +1159,18 @@ fn basic_stills() {
         let img = s.settle(&mut app, 60);
         s.save(img, "basic-txn-form");
         app.modal = None;
+        // A payback: money in that comes off a budget.
+        let budgeted = magpie_core::budget::month_budget(&app.store, magpie_core::Month::of(app.today))
+            .into_iter()
+            .max_by_key(|l| l.spent)
+            .map(|l| l.category);
+        if let Some(cat) = budgeted {
+            let f = crate::forms::TxnForm::payback_example(&app.store, app.today, cat, "25.00", "Sam");
+            app.open_modal(&ctx, crate::forms::Modal::Txn(f));
+            let img = s.settle(&mut app, 60);
+            s.save(img, "payback-form");
+            app.modal = None;
+        }
 
         // The switch, mid-way and done.
         app.go(&ctx, crate::app::Page::Dashboard);

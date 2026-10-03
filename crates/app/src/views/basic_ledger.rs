@@ -398,6 +398,9 @@ fn paint_row(
             tx.payee.clone()
         };
         let mut sub = store.category_name(tx.category).to_string();
+        if tx.amount > 0 && cat.is_some_and(|c| c.kind == magpie_core::CategoryKind::Expense) {
+            sub.push_str(" · paid back");
+        }
         if multi_account {
             sub.push_str(" · ");
             sub.push_str(account_name(tx.account));

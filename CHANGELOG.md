@@ -4,6 +4,15 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Paybacks: when money comes in because someone is paying you back (a
+  friend's share of the movie tickets), turn on "Someone's paying me back"
+  and pick the budget it comes off. It reduces that category's spending and
+  budget instead of counting as income, and the form shows the effect
+  ("Entertainment spent in Oct: ₹1,000 → ₹500 of ₹2,000").
+
 ## [0.2.1] - 2026-10-03
 
 Magpie gets a Basic mode: a simpler app for everyday money, alongside

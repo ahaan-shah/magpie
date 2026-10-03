@@ -142,6 +142,27 @@ mod tests {
     use jiff::civil::date;
 
     #[test]
+    fn payback_offsets_the_budget_not_income() {
+        // Paid 1,000 for movie tickets; a friend pays 400 back into the same
+        // category. The budget sees 600 spent, and income doesn't move.
+        let mut s = fixture();
+        let food = s.find_category("Food").unwrap().id;
+        s.save_budget_plan(BudgetPlan {
+            category: food,
+            amount: 2_000,
+            rollover: false,
+        })
+        .unwrap();
+        s.add_txn(txn(&s, date(2026, 4, 3), -1_000, "Food")).unwrap();
+        s.add_txn(txn(&s, date(2026, 4, 9), 400, "Food")).unwrap();
+        let m = Month { year: 2026, month: 4 };
+        let line = &month_budget(&s, m)[0];
+        assert_eq!((line.spent, line.remaining()), (600, 1_400));
+        let t = crate::analytics::month_totals(&s, m);
+        assert_eq!((t.income, t.expense), (0, 600));
+    }
+
+    #[test]
     fn rollover_carries_unspent() {
         let mut s = fixture();
         let food = s.find_category("Food").unwrap().id;
