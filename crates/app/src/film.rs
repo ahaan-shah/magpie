@@ -1171,6 +1171,22 @@ fn basic_stills() {
         app.go(&ctx, crate::app::Page::Accounts);
         let img = s.settle(&mut app, 80);
         s.save(img, "advanced-accounts");
+        // A transaction's details, in a short window so the panel scrolls.
+        let id = app.store.txns().iter().rev().find(|t| !t.tags.is_empty()).map(|t| t.id);
+        if let Some(id) = id {
+            app.go(&ctx, crate::app::Page::Ledger);
+            app.ledger.select(id);
+            s.size = vec2(1100.0, 640.0);
+            s.settle(&mut app, 60);
+            // Hover the panel so its (floating) scrollbar shows.
+            let mut img = None;
+            for _ in 0..30 {
+                img = Some(s.step(&mut app, vec![Event::PointerMoved(pos2(1000.0, 500.0))]));
+            }
+            s.save(img.expect("frame"), "advanced-ledger-detail");
+            s.size = vec2(1280.0, 800.0);
+            app.ledger.clear_selection();
+        }
 
         // Onboarding: Get started, then the mode step.
         let dir = std::env::temp_dir().join(format!("magpie-basic-stills-new-{theme}"));

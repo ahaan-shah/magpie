@@ -127,6 +127,12 @@ impl State {
             None
         }
     }
+    /// Selects one transaction, opening its details (for the stills).
+    #[cfg(test)]
+    pub fn select(&mut self, id: RowId) {
+        self.selected = BTreeSet::from([id]);
+        self.anchor = Some(id);
+    }
     pub fn clear_selection(&mut self) {
         self.selected.clear();
         self.anchor = None;
@@ -765,6 +771,10 @@ fn table(app: &mut App, ui: &mut Ui, t: &Theme, rows: &Rows, acts: &mut Vec<Act>
         ("Account", cols.acc, false),
         ("Amount", cols.amt, true),
     ] {
+        // A dropped column (narrow table) has no header either.
+        if r.width() <= 0.0 {
+            continue;
+        }
         let (pos, align) = if right {
             (pos2(r.right(), r.center().y), Align2::RIGHT_CENTER)
         } else {
@@ -1051,216 +1061,212 @@ fn detail(app: &mut App, ui: &mut Ui, t: &Theme, rect: Rect, tx: &Txn, acts: &mu
     let store = &app.store;
     let cur = store.account_cur(tx.account);
     let receipts: Vec<magpie_core::Receipt> = store.receipts_for(tx.id).cloned().collect();
-    w::card_in(ui, t, rect, |ui| {
-        crate::widgets::scroll_area()
-            .id_salt("detail-scroll")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    let cat = tx.category.and_then(|c| store.category(c));
-                    let (glyph, color) = if tx.is_transfer() {
-                        (ph::ARROWS_LEFT_RIGHT, t.text3)
-                    } else {
-                        (
-                            cat.map(|c| icons::glyph(&c.icon)).unwrap_or(ph::TAG),
-                            cat.map(|c| w::cat_color(c.color)).unwrap_or(t.text3),
-                        )
-                    };
-                    w::icon_badge(ui, t, glyph, color, 42.0);
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if w::icon_button(ui, t, ph::X, "Close").clicked() {
-                            app.ledger.selected.clear();
-                        }
-                    });
-                });
-                ui.add_space(10.0);
-                ui.label(
-                    egui::RichText::new(if tx.payee.is_empty() { "—" } else { &tx.payee })
-                        .font(theme::semibold(17.0))
-                        .color(t.text),
-                );
-                let c = if tx.amount > 0 { t.pos } else { t.text };
-                ui.label(
-                    egui::RichText::new(w::fmt_signed(tx.amount, cur))
-                        .font(theme::display(30.0))
-                        .color(c),
-                );
-                if cur != store.base() {
-                    ui.label(w::faint(
-                        t,
-                        format!("≈ {}", w::fmt_money(store.txn_base(tx), store.base())),
-                    ));
-                }
-                ui.add_space(12.0);
-                let field = |ui: &mut Ui, label: &str, value: egui::RichText| {
-                    ui.horizontal(|ui| {
-                        ui.allocate_ui_with_layout(
-                            vec2(86.0, 22.0),
-                            egui::Layout::left_to_right(egui::Align::Center),
-                            |ui| ui.label(w::faint(t, label)),
-                        );
-                        ui.label(value);
-                    });
-                };
-                field(ui, "Date", egui::RichText::new(w::fmt_date(tx.date)).color(t.text));
-                field(
-                    ui,
-                    "Account",
-                    egui::RichText::new(store.account_name(tx.account)).color(t.text),
-                );
-                if tx.is_transfer() {
-                    let other = store.txns().iter().find(|x| x.transfer == tx.transfer && x.id != tx.id);
-                    if let Some(o) = other {
-                        field(
-                            ui,
-                            if tx.amount < 0 { "To" } else { "From" },
-                            egui::RichText::new(store.account_name(o.account)).color(t.text),
-                        );
-                    }
-                } else {
-                    field(
-                        ui,
-                        "Category",
-                        egui::RichText::new(store.category_name(tx.category)).color(t.text),
-                    );
-                }
-                field(
-                    ui,
-                    "Status",
-                    egui::RichText::new(if tx.cleared { "Cleared" } else { "Pending" }).color(if tx.cleared {
-                        t.text
-                    } else {
-                        t.warn
-                    }),
-                );
-                if let Some(r) = tx.recurring.and_then(|r| store.rule(r)) {
-                    field(
-                        ui,
-                        "Repeats",
-                        egui::RichText::new(magpie_core::recurring::describe(r)).color(t.text),
-                    );
-                }
-                if !tx.tags.is_empty() {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.allocate_ui_with_layout(
-                            vec2(86.0, 22.0),
-                            egui::Layout::left_to_right(egui::Align::Center),
-                            |ui| ui.label(w::faint(t, "Tags")),
-                        );
-                        for tag in &tx.tags {
-                            w::chip(ui, t, Some(ph::HASH), tag, t.accent);
-                        }
-                    });
-                }
-                if !tx.note.is_empty() {
-                    ui.add_space(6.0);
-                    ui.label(w::faint(t, "Note"));
-                    ui.label(egui::RichText::new(&tx.note).color(t.text));
-                }
-                ui.add_space(14.0);
-                ui.horizontal_wrapped(|ui| {
-                    if w::secondary(ui, t, Some(ph::PENCIL_SIMPLE), "Edit").clicked() {
-                        acts.push(Act::Edit(tx.id));
-                    }
-                    if !tx.is_transfer() && w::ghost(ui, t, Some(ph::COPY), "").on_hover_text("Duplicate").clicked() {
-                        acts.push(Act::Duplicate(tx.id));
-                    }
-                    if !tx.is_transfer()
-                        && tx.recurring.is_none()
-                        && w::ghost(ui, t, Some(ph::ARROWS_CLOCKWISE), "")
-                            .on_hover_text("Make recurring")
-                            .clicked()
-                    {
-                        acts.push(Act::MakeRecurring(tx.id));
-                    }
-                    if w::ghost(ui, t, Some(ph::TRASH), "").on_hover_text("Delete").clicked() {
-                        acts.push(Act::Delete(vec![tx.id]));
-                    }
-                });
-                ui.add_space(18.0);
-                ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new("Receipts")
-                            .font(theme::semibold(13.5))
-                            .color(t.text),
-                    );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if w::icon_button(ui, t, ph::PAPERCLIP, "Attach a receipt").clicked() {
-                            acts.push(Act::Attach(tx.id));
-                        }
-                    });
-                });
-                if receipts.is_empty() {
-                    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 70.0), Sense::click());
-                    let h = motion::toggle(ui.ctx(), Id::new("drop-hint"), resp.hovered(), motion::MICRO);
-                    ui.painter().rect_stroke(
-                        r,
-                        CornerRadius::same(10),
-                        Stroke::new(1.0, motion::lerp_color(t.border, t.accent, h)),
-                        egui::StrokeKind::Inside,
-                    );
-                    ui.painter().text(
-                        r.center(),
-                        Align2::CENTER_CENTER,
-                        format!("{}  Drop a photo or PDF, or click", ph::UPLOAD_SIMPLE),
-                        theme::regular(12.5),
-                        t.text3,
-                    );
-                    if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
-                        acts.push(Act::Attach(tx.id));
-                    }
-                }
-                for r in &receipts {
-                    let Some(path) = receipts::path_of(&app.store, r) else {
-                        continue;
-                    };
-                    ui.add_space(6.0);
-                    if receipts::is_image(r) {
-                        match app.receipts.get(ui.ctx(), &r.hash, path.clone()) {
-                            Some(tex) => {
-                                let wdt = ui.available_width();
-                                let size = tex.size_vec2();
-                                let h = (wdt * size.y / size.x).min(260.0);
-                                let resp = ui.add(
-                                    egui::Image::new(&tex)
-                                        .fit_to_exact_size(vec2(wdt, h))
-                                        .corner_radius(10)
-                                        .sense(Sense::click()),
-                                );
-                                if resp
-                                    .on_hover_cursor(egui::CursorIcon::PointingHand)
-                                    .on_hover_text("Open")
-                                    .clicked()
-                                {
-                                    acts.push(Act::OpenReceipt(path.clone()));
-                                }
-                            }
-                            None => {
-                                let (rr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 120.0), Sense::hover());
-                                ui.painter().rect_filled(rr, CornerRadius::same(10), t.hover);
-                                ui.painter().text(
-                                    rr.center(),
-                                    Align2::CENTER_CENTER,
-                                    "Loading…",
-                                    theme::regular(12.0),
-                                    t.text3,
-                                );
-                            }
-                        }
-                    }
-                    ui.horizontal(|ui| {
-                        let icon = if receipts::is_image(r) { ph::IMAGE } else { ph::FILE_PDF };
-                        if ui.link(format!("{icon}  {}", r.name)).clicked() {
-                            acts.push(Act::OpenReceipt(path.clone()));
-                        }
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if w::icon_button(ui, t, ph::TRASH, "Remove receipt").clicked() {
-                                acts.push(Act::RemoveReceipt(r.id));
-                            }
-                        });
-                    });
+    // The scrollbar lives in the card's right padding, clear of the content.
+    w::card_scroll(ui, t, "detail-scroll", rect, |ui| {
+        ui.horizontal(|ui| {
+            let cat = tx.category.and_then(|c| store.category(c));
+            let (glyph, color) = if tx.is_transfer() {
+                (ph::ARROWS_LEFT_RIGHT, t.text3)
+            } else {
+                (
+                    cat.map(|c| icons::glyph(&c.icon)).unwrap_or(ph::TAG),
+                    cat.map(|c| w::cat_color(c.color)).unwrap_or(t.text3),
+                )
+            };
+            w::icon_badge(ui, t, glyph, color, 42.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if w::icon_button(ui, t, ph::X, "Close").clicked() {
+                    app.ledger.selected.clear();
                 }
             });
+        });
+        ui.add_space(10.0);
+        ui.label(
+            egui::RichText::new(if tx.payee.is_empty() { "—" } else { &tx.payee })
+                .font(theme::semibold(17.0))
+                .color(t.text),
+        );
+        let c = if tx.amount > 0 { t.pos } else { t.text };
+        ui.label(
+            egui::RichText::new(w::fmt_signed(tx.amount, cur))
+                .font(theme::display(30.0))
+                .color(c),
+        );
+        if cur != store.base() {
+            ui.label(w::faint(
+                t,
+                format!("≈ {}", w::fmt_money(store.txn_base(tx), store.base())),
+            ));
+        }
+        ui.add_space(12.0);
+        let field = |ui: &mut Ui, label: &str, value: egui::RichText| {
+            ui.horizontal(|ui| {
+                ui.allocate_ui_with_layout(
+                    vec2(86.0, 22.0),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| ui.label(w::faint(t, label)),
+                );
+                ui.label(value);
+            });
+        };
+        field(ui, "Date", egui::RichText::new(w::fmt_date(tx.date)).color(t.text));
+        field(
+            ui,
+            "Account",
+            egui::RichText::new(store.account_name(tx.account)).color(t.text),
+        );
+        if tx.is_transfer() {
+            let other = store.txns().iter().find(|x| x.transfer == tx.transfer && x.id != tx.id);
+            if let Some(o) = other {
+                field(
+                    ui,
+                    if tx.amount < 0 { "To" } else { "From" },
+                    egui::RichText::new(store.account_name(o.account)).color(t.text),
+                );
+            }
+        } else {
+            field(
+                ui,
+                "Category",
+                egui::RichText::new(store.category_name(tx.category)).color(t.text),
+            );
+        }
+        field(
+            ui,
+            "Status",
+            egui::RichText::new(if tx.cleared { "Cleared" } else { "Pending" }).color(if tx.cleared {
+                t.text
+            } else {
+                t.warn
+            }),
+        );
+        if let Some(r) = tx.recurring.and_then(|r| store.rule(r)) {
+            field(
+                ui,
+                "Repeats",
+                egui::RichText::new(magpie_core::recurring::describe(r)).color(t.text),
+            );
+        }
+        if !tx.tags.is_empty() {
+            ui.horizontal_wrapped(|ui| {
+                ui.allocate_ui_with_layout(
+                    vec2(86.0, 22.0),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| ui.label(w::faint(t, "Tags")),
+                );
+                for tag in &tx.tags {
+                    w::chip(ui, t, Some(ph::HASH), tag, t.accent);
+                }
+            });
+        }
+        if !tx.note.is_empty() {
+            ui.add_space(6.0);
+            ui.label(w::faint(t, "Note"));
+            ui.label(egui::RichText::new(&tx.note).color(t.text));
+        }
+        ui.add_space(14.0);
+        ui.horizontal_wrapped(|ui| {
+            if w::secondary(ui, t, Some(ph::PENCIL_SIMPLE), "Edit").clicked() {
+                acts.push(Act::Edit(tx.id));
+            }
+            if !tx.is_transfer() && w::ghost(ui, t, Some(ph::COPY), "").on_hover_text("Duplicate").clicked() {
+                acts.push(Act::Duplicate(tx.id));
+            }
+            if !tx.is_transfer()
+                && tx.recurring.is_none()
+                && w::ghost(ui, t, Some(ph::ARROWS_CLOCKWISE), "")
+                    .on_hover_text("Make recurring")
+                    .clicked()
+            {
+                acts.push(Act::MakeRecurring(tx.id));
+            }
+            if w::ghost(ui, t, Some(ph::TRASH), "").on_hover_text("Delete").clicked() {
+                acts.push(Act::Delete(vec![tx.id]));
+            }
+        });
+        ui.add_space(18.0);
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("Receipts")
+                    .font(theme::semibold(13.5))
+                    .color(t.text),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if w::icon_button(ui, t, ph::PAPERCLIP, "Attach a receipt").clicked() {
+                    acts.push(Act::Attach(tx.id));
+                }
+            });
+        });
+        if receipts.is_empty() {
+            let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), 70.0), Sense::click());
+            let h = motion::toggle(ui.ctx(), Id::new("drop-hint"), resp.hovered(), motion::MICRO);
+            ui.painter().rect_stroke(
+                r,
+                CornerRadius::same(10),
+                Stroke::new(1.0, motion::lerp_color(t.border, t.accent, h)),
+                egui::StrokeKind::Inside,
+            );
+            ui.painter().text(
+                r.center(),
+                Align2::CENTER_CENTER,
+                format!("{}  Drop a photo or PDF, or click", ph::UPLOAD_SIMPLE),
+                theme::regular(12.5),
+                t.text3,
+            );
+            if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+                acts.push(Act::Attach(tx.id));
+            }
+        }
+        for r in &receipts {
+            let Some(path) = receipts::path_of(&app.store, r) else {
+                continue;
+            };
+            ui.add_space(6.0);
+            if receipts::is_image(r) {
+                match app.receipts.get(ui.ctx(), &r.hash, path.clone()) {
+                    Some(tex) => {
+                        let wdt = ui.available_width();
+                        let size = tex.size_vec2();
+                        let h = (wdt * size.y / size.x).min(260.0);
+                        let resp = ui.add(
+                            egui::Image::new(&tex)
+                                .fit_to_exact_size(vec2(wdt, h))
+                                .corner_radius(10)
+                                .sense(Sense::click()),
+                        );
+                        if resp
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .on_hover_text("Open")
+                            .clicked()
+                        {
+                            acts.push(Act::OpenReceipt(path.clone()));
+                        }
+                    }
+                    None => {
+                        let (rr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 120.0), Sense::hover());
+                        ui.painter().rect_filled(rr, CornerRadius::same(10), t.hover);
+                        ui.painter().text(
+                            rr.center(),
+                            Align2::CENTER_CENTER,
+                            "Loading…",
+                            theme::regular(12.0),
+                            t.text3,
+                        );
+                    }
+                }
+            }
+            ui.horizontal(|ui| {
+                let icon = if receipts::is_image(r) { ph::IMAGE } else { ph::FILE_PDF };
+                if ui.link(format!("{icon}  {}", r.name)).clicked() {
+                    acts.push(Act::OpenReceipt(path.clone()));
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if w::icon_button(ui, t, ph::TRASH, "Remove receipt").clicked() {
+                        acts.push(Act::RemoveReceipt(r.id));
+                    }
+                });
+            });
+        }
     });
 }
 

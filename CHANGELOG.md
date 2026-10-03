@@ -31,6 +31,10 @@ All notable changes to Magpie are documented here. The format follows
 - "New category…" in Budgets → Add budget no longer gets cut off.
 - Dropdowns open just below their field instead of overlapping it, and
   always fit in the window (they scroll when there isn't room).
+- The transaction details panel's scrollbar sits in its margin instead of
+  over the icons and the receipts box.
+- With the details panel open, the ledger no longer prints an "Account"
+  header over the amounts when that column is hidden.
 - `install.sh --uninstall` (`curl … | sh -s -- --uninstall`) removes Magpie
   on Linux and macOS and keeps your data.
 
