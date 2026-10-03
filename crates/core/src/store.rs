@@ -30,6 +30,9 @@ pub struct Settings {
     /// Basic mode: a simpler app with fewer pages. Existing workspaces
     /// (no setting saved) stay in Advanced.
     pub basic: bool,
+    /// The last Magpie version that ran on this workspace, so the app can
+    /// say what's new after an update. `None` before 0.2.3.
+    pub seen_version: Option<String>,
 }
 
 impl Default for Settings {
@@ -46,6 +49,7 @@ impl Default for Settings {
             font: "Inter".into(),
             auto_update: true,
             basic: false,
+            seen_version: None,
         }
     }
 }
@@ -133,6 +137,7 @@ impl Store {
             settings.auto_update = v == "1";
         }
         settings.basic = db.setting("mode")?.as_deref() == Some("basic");
+        settings.seen_version = db.setting("seen_version")?;
 
         let mut rates = Rates::defaults();
         for (c, r, manual) in db.rates()? {
@@ -218,6 +223,9 @@ impl Store {
         db.set_setting("font", &s.font)?;
         db.set_setting("auto_update", if s.auto_update { "1" } else { "0" })?;
         db.set_setting("mode", if s.basic { "basic" } else { "advanced" })?;
+        if let Some(v) = &s.seen_version {
+            db.set_setting("seen_version", v)?;
+        }
         if let Some(a) = s.default_account {
             db.set_setting("default_account", &a.to_string())?;
         }

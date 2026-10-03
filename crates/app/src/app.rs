@@ -134,6 +134,7 @@ pub struct App {
     pub goals: views::goals::State,
     pub settings: views::settings::State,
     pub onboarding: Option<views::onboarding::State>,
+    pub whats_new: crate::whatsnew::State,
     /// When onboarding handed over, and the preview (0 Basic, 1 Advanced)
     /// that grew to fill the window: it dissolves into the real app.
     pub intro_at: Option<(f64, f32)>,
@@ -194,6 +195,7 @@ impl App {
             Err(e) => toasts.error(format!("Couldn't post recurring transactions: {e}")),
         }
         let onboarding = (store.is_empty() || !store.settings().onboarded).then(views::onboarding::State::new);
+        let whats_new = crate::whatsnew::State::new(&mut store);
         let page = persisted
             .as_ref()
             .map(|p| p.page)
@@ -219,6 +221,7 @@ impl App {
             goals: views::goals::State::default(),
             settings: views::settings::State::default(),
             onboarding,
+            whats_new,
             intro_at: None,
             mode_fade: None,
             receipts: ReceiptCache::default(),
@@ -316,6 +319,8 @@ impl App {
             page
         };
         if self.page != page {
+            // Moving to another page puts "What's new" away.
+            self.whats_new.dismiss(&mut self.store);
             crate::diag::crumb(format!("go {page:?}"));
             self.page = page;
             self.shown_at = ctx.input(|i| i.time);
@@ -787,9 +792,12 @@ impl App {
                     if nav_item(ui, &t, Page::Settings, label, self.page == Page::Settings, k, item_h).clicked() {
                         self.go(&ctx, Page::Settings);
                     }
-                    // Just above Settings, where an update naturally lives.
+                    // Just above Settings, where an update naturally lives;
+                    // after one, the same spot says what's new.
                     if self.updater.prompt() {
                         self.update_prompt(ui, &t, k);
+                    } else if self.whats_new.pending && crate::whatsnew::row(ui, &t, k).clicked() {
+                        self.open_modal(&ctx, Modal::WhatsNew);
                     }
                     if k < 0.3 {
                         ui.add_space(8.0);

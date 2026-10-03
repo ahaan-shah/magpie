@@ -30,6 +30,7 @@ mod toasts;
 mod tour;
 mod updater;
 mod views;
+mod whatsnew;
 mod widgets;
 
 use magpie_core::Store;

@@ -27,6 +27,7 @@ pub enum Modal {
     Confirm(Confirm),
     Help,
     Currency(CurrencyForm),
+    WhatsNew,
 }
 
 impl Modal {
@@ -42,6 +43,7 @@ impl Modal {
             Modal::Confirm(_) => "confirm",
             Modal::Help => "help",
             Modal::Currency(_) => "currency",
+            Modal::WhatsNew => "whats-new",
         }
     }
 }
@@ -74,6 +76,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         Modal::Help => 760.0,
         Modal::Goal(_) | Modal::Rule(_) | Modal::Txn(_) => 520.0,
         Modal::Account(_) => 720.0,
+        Modal::WhatsNew => 500.0,
         _ => 460.0,
     };
     let area =
@@ -111,6 +114,13 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 Modal::Confirm(f) => f.ui(app, ui, &t),
                 Modal::Help => help_ui(ui, &t),
                 Modal::Currency(f) => f.ui(app, ui, &t),
+                Modal::WhatsNew => {
+                    if crate::whatsnew::card(app, ui, &t) {
+                        Outcome::Close
+                    } else {
+                        Outcome::Keep
+                    }
+                }
             }
         });
     let close = resp.should_close() || resp.inner == Outcome::Close;

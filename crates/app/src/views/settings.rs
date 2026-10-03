@@ -38,6 +38,7 @@ enum Act {
     UpdateAction,
     AutoUpdate(bool),
     Mode(bool),
+    ReleaseNotes,
 }
 
 pub fn export_all(app: &mut App, f: Format) {
@@ -549,11 +550,28 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             let (r, _) = ui.allocate_exact_size(vec2(40.0, 40.0), Sense::hover());
             crate::app::logo(ui.painter(), r, &t);
             ui.vertical(|ui| {
-                ui.label(
-                    egui::RichText::new(format!("Magpie {}", env!("CARGO_PKG_VERSION")))
-                        .font(theme::semibold(14.0))
-                        .color(t.text),
-                );
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(format!("Magpie {}", env!("CARGO_PKG_VERSION")))
+                            .font(theme::semibold(14.0))
+                            .color(t.text),
+                    );
+                    let link = ui
+                        .add(
+                            egui::Label::new(
+                                egui::RichText::new(format!("What's new {}", ph::ARROW_SQUARE_OUT))
+                                    .font(theme::medium(12.5))
+                                    .color(t.accent),
+                            )
+                            .sense(Sense::click()),
+                        )
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .on_hover_text("Open this version's release notes in your browser");
+                    crate::marks::record(|| "settings:whatsnew".into(), link.rect);
+                    if link.clicked() {
+                        acts.push(Act::ReleaseNotes);
+                    }
+                });
                 ui.label(w::subtle(&t, "Local-first personal finance. MIT licensed."));
             });
         });
@@ -577,6 +595,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 app.toasts.ok(app.store.update_settings(|s| s.auto_update = v));
             }
             Act::Mode(b) => app.set_basic(&ctx, b),
+            Act::ReleaseNotes => crate::app::open_url(&crate::whatsnew::release_url(crate::whatsnew::VERSION)),
             Act::SetRate(c, per_eur) => {
                 if app.toasts.ok(app.store.set_rate(c, per_eur, true)).is_some() {
                     app.settings.rate_edit = None;

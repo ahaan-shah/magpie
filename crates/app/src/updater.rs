@@ -181,6 +181,8 @@ impl Updater {
         }
         let _ = std::process::Command::new(exe)
             .args(std::env::args_os().skip(1))
+            // So the new version can say what's new right away.
+            .env(crate::whatsnew::UPDATED_FROM_ENV, crate::whatsnew::VERSION)
             .spawn();
     }
 

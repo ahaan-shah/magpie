@@ -4,6 +4,14 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- What's new: after Magpie updates, a "What's new" button sits where the
+  update button was. It opens a card with the changes in a few plain points
+  (with a picture where it helps), and goes away once you move to another
+  page. Settings → About links to the full release notes.
+
 ## [0.2.2] - 2026-10-03
 
 When a friend pays you back, it can now come off the budget you spent it

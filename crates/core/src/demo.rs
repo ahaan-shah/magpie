@@ -457,7 +457,11 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
                 note: String::new(),
             })
         })?;
-    store.update_settings(|s| s.onboarded = true)?;
+    // A fresh workspace has nothing new to announce.
+    store.update_settings(|s| {
+        s.onboarded = true;
+        s.seen_version = Some(env!("CARGO_PKG_VERSION").into());
+    })?;
     Ok(())
 }
 

@@ -1172,6 +1172,23 @@ fn basic_stills() {
             app.modal = None;
         }
 
+        // What's new after an update: the sidebar row, then the card, here
+        // with a picture on one point.
+        app.whats_new.notes = vec![&STILL_NOTES];
+        app.whats_new.pending = true;
+        app.go(&ctx, crate::app::Page::Dashboard);
+        app.whats_new.pending = true;
+        let img = s.settle(&mut app, 40);
+        s.save(img, "whatsnew-row");
+        s.click(&mut app, "whatsnew:row");
+        let img = s.settle(&mut app, 60);
+        s.save(img, "whatsnew-card");
+        s.click(&mut app, "whatsnew:ok");
+        s.settle(&mut app, 30);
+        app.go(&ctx, crate::app::Page::Settings);
+        assert!(!app.whats_new.pending, "moving to another page puts it away");
+        app.go(&ctx, crate::app::Page::Dashboard);
+
         // The switch, mid-way and done.
         app.go(&ctx, crate::app::Page::Dashboard);
         s.settle(&mut app, 60);
@@ -1254,3 +1271,23 @@ fn basic_stills() {
         s.save(img, "onboarding-done");
     }
 }
+
+/// Notes for the What's new stills: a short point and one with a picture.
+#[cfg(test)]
+static STILL_NOTES: crate::whatsnew::Notes = crate::whatsnew::Notes {
+    version: "0.2.3",
+    items: &[
+        crate::whatsnew::Item {
+            icon: crate::icons::ph::SPARKLE,
+            title: "See what's new after each update",
+            body: "When Magpie updates, this card shows what changed in a few words. You can find the full notes any time in Settings.",
+            image: None,
+        },
+        crate::whatsnew::Item {
+            icon: crate::icons::ph::CHART_PIE_SLICE,
+            title: "Budgets that pace you",
+            body: "Each budget shows where you should be today, so you can slow down before you run out.",
+            image: Some(include_bytes!("../../../docs/screenshots/budgets.png")),
+        },
+    ],
+};
