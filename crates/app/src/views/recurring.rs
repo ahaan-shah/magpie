@@ -223,7 +223,7 @@ fn rule_row(
         p.rect_filled(
             rect.expand2(vec2(8.0, 0.0)),
             CornerRadius::same(10),
-            motion::with_alpha(t.hover, h),
+            motion::with_alpha(t.hover_wash(), h),
         );
     }
     let alpha = if r.active { 1.0 } else { 0.45 };

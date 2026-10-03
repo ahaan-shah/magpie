@@ -922,7 +922,7 @@ fn stills() {
             step(&mut app, Vec::new(), t);
         }
         // Hover the row two below the selection to show both states.
-        let hover = picker.center() + vec2(-40.0, picker.height() * 4.2);
+        let hover = picker.center() + vec2(-40.0, picker.height() * 4.45);
         let mut last = None;
         for _ in 0..30 {
             t += 1.0 / 60.0;
@@ -1079,7 +1079,7 @@ fn basic_stills() {
     let out = std::env::var("MAGPIE_STILL_DIR")
         .unwrap_or_else(|_| std::env::temp_dir().join("magpie-stills").display().to_string());
     std::fs::create_dir_all(&out).expect("out dir");
-    for theme in ["Paper", "Midnight"] {
+    for theme in ["Magpie Light", "Magpie Dark"] {
         let dir = std::env::temp_dir().join(format!("magpie-basic-stills-{theme}"));
         let _ = std::fs::remove_dir_all(&dir);
         let mut store = magpie_core::Store::open(&dir).expect("store");
@@ -1112,7 +1112,7 @@ fn basic_stills() {
             renderer: WgpuTestRenderer::new(),
             t: 0.0,
             out: out.clone(),
-            suffix: theme.to_lowercase(),
+            suffix: theme.to_lowercase().replace(' ', "-"),
         };
         for (page, name) in [
             (crate::app::Page::Dashboard, "basic-home"),
@@ -1125,6 +1125,26 @@ fn basic_stills() {
             let img = s.settle(&mut app, 80);
             s.save(img, name);
         }
+        // App mode sits below Currency, further down Settings.
+        for _ in 0..60 {
+            s.step(
+                &mut app,
+                vec![
+                    Event::PointerMoved(pos2(900.0, 500.0)),
+                    Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Line,
+                        delta: vec2(0.0, -1.0),
+                        modifiers: Modifiers::NONE,
+                        phase: egui::TouchPhase::Move,
+                    },
+                ],
+            );
+            if crate::marks::get("mode:Basic").is_some_and(|r| r.top() < 560.0) {
+                break;
+            }
+        }
+        let img = s.settle(&mut app, 40);
+        s.save(img, "basic-settings-mode");
         let first = app.store.accounts()[0].clone();
         let f = crate::forms::AccountForm::edit(&app.store, &first);
         app.open_modal(&ctx, crate::forms::Modal::Account(f));

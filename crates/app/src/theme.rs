@@ -36,6 +36,26 @@ pub const fn rgb(v: u32) -> Color32 {
 
 pub const THEMES: &[Theme] = &[
     // ---- dark
+    // Magpie's own: the brand orange softened, on slate blue (a magpie's
+    // wing), with warm beige text.
+    Theme {
+        name: "Magpie Dark",
+        dark: true,
+        bg: hex(0x161B22),
+        sidebar: hex(0x12161C),
+        card: hex(0x1C222B),
+        hover: hex(0x232A34),
+        elevated: hex(0x212833),
+        border: hex(0x2B333E),
+        text: hex(0xEDE6DC),
+        text2: hex(0xB2A99D),
+        text3: hex(0x7D7A76),
+        accent: hex(0xEE9B70),
+        on_accent: hex(0x1B140F),
+        pos: hex(0x8DCB9C),
+        neg: hex(0xF08B80),
+        warn: hex(0xEBC27A),
+    },
     Theme {
         name: "Midnight",
         dark: true,
@@ -163,6 +183,25 @@ pub const THEMES: &[Theme] = &[
         warn: hex(0xDBBC7F),
     },
     // ---- light
+    // Magpie's own: beige paper, a pale blue sidebar, soft brand orange.
+    Theme {
+        name: "Magpie Light",
+        dark: false,
+        bg: hex(0xF7F2EA),
+        sidebar: hex(0xEAEEF1),
+        card: hex(0xFFFCF7),
+        hover: hex(0xF3EDE4),
+        elevated: hex(0xFFFCF7),
+        border: hex(0xE6DDD1),
+        text: hex(0x2B2622),
+        text2: hex(0x6D635A),
+        text3: hex(0xA2978B),
+        accent: hex(0xD7743F),
+        on_accent: hex(0xFFFFFF),
+        pos: hex(0x4F9466),
+        neg: hex(0xCC5F52),
+        warn: hex(0xC98F2E),
+    },
     Theme {
         name: "Daylight",
         dark: false,
@@ -326,6 +365,18 @@ impl Theme {
     /// A translucent tint of `c` over the card colour.
     pub fn tint(&self, c: Color32, amount: f32) -> Color32 {
         motion::lerp_color(self.card, c, amount)
+    }
+
+    /// The wash under a hovered row or button: a touch of the text colour,
+    /// so it shows on every surface (`hover` alone nearly matches cards and
+    /// popups in some themes).
+    pub fn hover_wash(&self) -> Color32 {
+        motion::with_alpha(self.text, if self.dark { 0.075 } else { 0.06 })
+    }
+
+    /// `base` with the hover wash on top, as a solid colour.
+    pub fn hovered(&self, base: Color32) -> Color32 {
+        motion::lerp_color(base, self.text, if self.dark { 0.075 } else { 0.06 })
     }
 
     pub fn accent_soft(&self) -> Color32 {

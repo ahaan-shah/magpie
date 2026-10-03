@@ -920,7 +920,7 @@ fn columns(r: Rect) -> Cols {
 
 fn paint_row(ui: &Ui, t: &Theme, store: &Store, tx: &Txn, r: Rect, hover: f32, sel: f32) {
     let p = ui.painter();
-    let bg = motion::lerp_color(motion::with_alpha(t.hover, hover), t.accent_soft(), sel);
+    let bg = motion::lerp_color(motion::with_alpha(t.hover_wash(), hover), t.accent_soft(), sel);
     if hover > 0.0 || sel > 0.0 {
         p.rect_filled(r.shrink2(vec2(6.0, 2.0)), CornerRadius::same(9), bg);
     }

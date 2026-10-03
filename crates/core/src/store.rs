@@ -36,7 +36,7 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             base: Cur::USD,
-            theme: "Midnight".into(),
+            theme: "Magpie Dark".into(),
             fx_auto: true,
             fx_updated: None,
             onboarded: false,

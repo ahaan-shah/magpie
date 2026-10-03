@@ -936,7 +936,7 @@ fn icon_row(ui: &mut Ui, t: &Theme, icon: &mut String, color: Color32) {
             let bg = if sel {
                 t.tint(color, 0.3)
             } else if resp.hovered() {
-                t.hover
+                t.hover_wash()
             } else {
                 Color32::TRANSPARENT
             };
@@ -969,7 +969,7 @@ fn account_icon_row(ui: &mut Ui, t: &Theme, acc: &mut Account, color: Color32) {
             let bg = if sel {
                 t.tint(color, 0.3)
             } else {
-                motion::with_alpha(t.hover, h)
+                motion::with_alpha(t.hover_wash(), h)
             };
             ui.painter().rect_filled(r, CornerRadius::same(8), bg);
             ui.painter().text(
@@ -1639,27 +1639,37 @@ impl CategoryForm {
             self.error = Some("Name the category".into());
             return Outcome::Keep;
         }
-        if app
+        let lower = name.to_lowercase();
+        let existing = app
             .store
             .categories()
             .iter()
-            .any(|c| c.id != self.cat.id && c.name.eq_ignore_ascii_case(&name))
-        {
-            self.error = Some("A category with that name already exists".into());
-            return Outcome::Keep;
+            .find(|c| c.id != self.cat.id && c.name.to_lowercase() == lower)
+            .cloned();
+        if let Some(c) = existing {
+            if self.cat.id != 0 {
+                // Renaming onto another category would merge two; don't.
+                self.error = Some("A category with that name already exists".into());
+                return Outcome::Keep;
+            }
+            // A new one that's already there: use the one there is.
+            let mut c = c;
+            if c.archived {
+                c.archived = false;
+                if app.toasts.ok(app.store.save_category(c.clone())).is_none() {
+                    return Outcome::Close;
+                }
+            }
+            app.toasts.info(format!("“{}” already exists, so we used that", c.name));
+            if self.budget && c.kind == CategoryKind::Expense {
+                self.budget_for(app, c.id);
+            }
+            return Outcome::Close;
         }
         self.cat.name = name;
         if let Some(id) = app.toasts.ok(app.store.save_category(self.cat.clone())) {
             if self.budget && self.cat.kind == CategoryKind::Expense {
-                let r = app.store.edit_budgets("Add budget", &[id], |s| {
-                    s.save_budget_plan(magpie_core::BudgetPlan {
-                        category: id,
-                        amount: 0,
-                        rollover: false,
-                    })
-                });
-                if app.toasts.ok(r).is_some() {
-                    app.budgets.edit(id, String::new());
+                if self.budget_for(app, id) {
                     app.toasts
                         .success(format!("Created “{}” — now set its monthly amount", self.cat.name));
                 }
@@ -1668,6 +1678,28 @@ impl CategoryForm {
             }
         }
         Outcome::Close
+    }
+
+    /// Gives the category a budget (if it hasn't one) and opens its editor
+    /// on the Budgets page.
+    fn budget_for(&self, app: &mut App, id: RowId) -> bool {
+        if let Some(plan) = app.store.budget_plan(id) {
+            let amount = money::to_input(plan.amount, app.store.base());
+            app.budgets.edit(id, amount);
+            return true;
+        }
+        let r = app.store.edit_budgets("Add budget", &[id], |s| {
+            s.save_budget_plan(magpie_core::BudgetPlan {
+                category: id,
+                amount: 0,
+                rollover: false,
+            })
+        });
+        if app.toasts.ok(r).is_some() {
+            app.budgets.edit(id, String::new());
+            return true;
+        }
+        false
     }
 }
 

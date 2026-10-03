@@ -136,6 +136,8 @@ pub struct App {
     pub onboarding: Option<views::onboarding::State>,
     /// When onboarding handed over: the app fades in from the background.
     pub intro_at: Option<f64>,
+    /// A mode switch in progress: when it started, and to which mode.
+    mode_fade: Option<(f64, bool)>,
     pub receipts: ReceiptCache,
     pub dialogs: crate::dialogs::Dialogs,
     pub updater: crate::updater::Updater,
@@ -217,6 +219,7 @@ impl App {
             settings: views::settings::State::default(),
             onboarding,
             intro_at: None,
+            mode_fade: None,
             receipts: ReceiptCache::default(),
             dialogs: crate::dialogs::Dialogs::default(),
             updater: crate::updater::Updater::default(),
@@ -242,13 +245,44 @@ impl App {
         self.store.settings().basic
     }
 
-    /// Switches between Basic and Advanced. The sidebar folds the extra
-    /// pages in or out and the page fades in again; nothing else changes,
-    /// since both modes show the same data.
+    /// Switches between Basic and Advanced: the whole app fades out, changes
+    /// mode while hidden, and fades back in (see `mode_fade`).
     pub fn set_basic(&mut self, ctx: &egui::Context, basic: bool) {
-        if self.basic() == basic {
+        if self.mode_fade.is_some() || self.basic() == basic {
             return;
         }
+        self.mode_fade = Some((ctx.input(|i| i.time), basic));
+        ctx.request_repaint();
+    }
+
+    /// Fades the app out and back in around a mode switch, so the whole app
+    /// visibly becomes the other mode.
+    fn mode_fade(&mut self, ctx: &egui::Context, t: &Theme) {
+        const OUT: f32 = 0.18;
+        const IN: f32 = 0.34;
+        let Some((at, basic)) = self.mode_fade else { return };
+        let e = (ctx.input(|i| i.time) - at) as f32;
+        let cover = if e < OUT {
+            motion::ease_in_out(e / OUT)
+        } else {
+            if self.basic() != basic {
+                self.apply_basic(ctx, basic);
+            }
+            1.0 - motion::ease_out((e - OUT) / IN)
+        };
+        if e >= OUT + IN {
+            self.mode_fade = None;
+            return;
+        }
+        // Above the panels, below modals and toasts.
+        ctx.layer_painter(egui::LayerId::new(egui::Order::Middle, Id::new("mode-fade")))
+            .rect_filled(ctx.content_rect(), 0.0, motion::with_alpha(t.bg, cover));
+        ctx.request_repaint();
+    }
+
+    /// The switch itself, done while the app is hidden: sidebar and page
+    /// jump straight to the new mode and the page's cards reveal again.
+    fn apply_basic(&mut self, ctx: &egui::Context, basic: bool) {
         crate::diag::crumb(format!("mode {}", if basic { "basic" } else { "advanced" }));
         if self
             .toasts
@@ -261,6 +295,10 @@ impl App {
             self.page = Page::Dashboard;
         }
         self.ledger.clear_selection();
+        for p in Page::NAV {
+            motion::snap(ctx, Id::new(("nav-vis", p as u8)));
+        }
+        motion::snap(ctx, Id::new("nav-indicator"));
         self.shown_at = ctx.input(|i| i.time);
         self.toasts.info(if basic {
             concat!("Basic mode. ", shortcut!("Shift T"), " brings everything back.")
@@ -553,7 +591,7 @@ impl App {
             self.collapsed = !self.collapsed;
         }
         if pressed(cmd | shift, Key::L) {
-            let name = if self.t().dark { "Daylight" } else { "Midnight" };
+            let name = if self.t().dark { "Magpie Light" } else { "Magpie Dark" };
             self.set_theme(ctx, name);
         }
         if !typing
@@ -688,7 +726,7 @@ impl App {
                     let collapsed_now = k > 0.5;
                     let full = ui.max_rect();
                     let btn = 30.0;
-                    let strip_h = if collapsed_now { btn * 3.0 + 12.0 } else { btn };
+                    let strip_h = if collapsed_now { btn * 2.0 + 6.0 } else { btn };
                     let (strip, _) = ui.allocate_exact_size(vec2(full.width(), strip_h), Sense::hover());
                     let icon_cx = motion::lerp(strip.left() + 23.0, strip.center().x, k);
                     let dark = t.dark;
@@ -698,17 +736,15 @@ impl App {
                         ph::CARET_CIRCLE_DOUBLE_LEFT
                     };
                     let theme_glyph = if dark { ph::SUN } else { ph::MOON };
-                    let (collapse_rect, theme_rect, mode_rect) = if collapsed_now {
+                    let (collapse_rect, theme_rect) = if collapsed_now {
                         (
                             Rect::from_center_size(pos2(icon_cx, strip.bottom() - btn / 2.0), vec2(btn, btn)),
-                            Rect::from_center_size(pos2(icon_cx, strip.center().y), vec2(btn, btn)),
                             Rect::from_center_size(pos2(icon_cx, strip.top() + btn / 2.0), vec2(btn, btn)),
                         )
                     } else {
                         (
                             Rect::from_center_size(pos2(icon_cx, strip.center().y), vec2(btn, btn)),
                             Rect::from_center_size(pos2(icon_cx + btn + 8.0, strip.center().y), vec2(btn, btn)),
-                            Rect::from_center_size(pos2(icon_cx + 2.0 * (btn + 8.0), strip.center().y), vec2(btn, btn)),
                         )
                     };
                     let tip = if narrow {
@@ -737,25 +773,8 @@ impl App {
                         })
                         .inner;
                     if theme_btn.clicked() {
-                        let name = if dark { "Daylight" } else { "Midnight" };
+                        let name = if dark { "Magpie Light" } else { "Magpie Dark" };
                         self.set_theme(&ctx, name);
-                    }
-                    let mode_btn = ui
-                        .scope_builder(egui::UiBuilder::new().max_rect(mode_rect), |ui| {
-                            widgets::icon_button(
-                                ui,
-                                &t,
-                                if basic { ph::SLIDERS_HORIZONTAL } else { ph::FEATHER },
-                                if basic {
-                                    concat!("Switch to Advanced mode (", shortcut!("Shift T"), ")")
-                                } else {
-                                    concat!("Switch to Basic mode (", shortcut!("Shift T"), ")")
-                                },
-                            )
-                        })
-                        .inner;
-                    if mode_btn.clicked() {
-                        self.set_basic(&ctx, !basic);
                     }
                     ui.add_space(4.0);
                     let label = NavLabel {
@@ -816,7 +835,7 @@ impl App {
         let shown = motion::appear(&ctx, 0.0, 0.0, 0.4);
         let p = ui.painter();
         if hover > 0.0 {
-            p.rect_filled(rect, CornerRadius::same(10), motion::with_alpha(t.hover, hover));
+            p.rect_filled(rect, CornerRadius::same(10), motion::with_alpha(t.hover_wash(), hover));
         }
         let fg = motion::with_alpha(motion::lerp_color(t.text3, t.text, hover), shown);
         let icon_x = motion::lerp(rect.left() + 14.0, rect.center().x - 8.0, collapse);
@@ -1180,6 +1199,7 @@ impl App {
         forms::show(self, &ctx);
         crate::palette::show(self, &ctx);
         self.drop_overlay(&ctx);
+        self.mode_fade(&ctx, &t);
         if let Some(at) = self.intro_at {
             let k = motion::appear(&ctx, at, 0.0, 0.5);
             if k >= 1.0 {
@@ -1225,7 +1245,7 @@ fn nav_item(
     );
     let p = ui.painter();
     if hover > 0.0 {
-        p.rect_filled(rect, CornerRadius::same(10), motion::with_alpha(t.hover, hover));
+        p.rect_filled(rect, CornerRadius::same(10), motion::with_alpha(t.hover_wash(), hover));
     }
     let fg = if active {
         t.text
@@ -1287,7 +1307,7 @@ fn search_pill(ui: &mut Ui, t: &Theme) -> egui::Response {
     p.rect(
         rect,
         CornerRadius::same(10),
-        motion::lerp_color(t.card, t.hover, hover),
+        motion::lerp_color(t.card, t.hovered(t.card), hover),
         Stroke::new(
             1.0,
             motion::lerp_color(t.border, motion::with_alpha(t.accent, 0.5), hover),

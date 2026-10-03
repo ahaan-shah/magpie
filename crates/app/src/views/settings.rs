@@ -85,30 +85,6 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     section(
         ui,
         &t,
-        "App mode",
-        "Basic keeps Magpie simple. Advanced shows everything. Your data is the same either way.",
-        |ui| {
-            let gap = 16.0;
-            let wdt = (ui.available_width() - gap) / 2.0;
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = gap;
-                for b in [true, false] {
-                    if mode_tile(ui, &t, b, basic == b, wdt).clicked() {
-                        acts.push(Act::Mode(b));
-                    }
-                }
-            });
-            ui.add_space(8.0);
-            ui.label(w::faint(
-                &t,
-                concat!("Switch from anywhere with ", shortcut!("Shift T"), "."),
-            ));
-        },
-    );
-
-    section(
-        ui,
-        &t,
         "Appearance and feel",
         "Pick a look (← → to flip through).",
         |ui| {
@@ -358,6 +334,30 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     section(
         ui,
         &t,
+        "App mode",
+        "Choose how much Magpie shows. Your data stays the same.",
+        |ui| {
+            let gap = 16.0;
+            let wdt = (ui.available_width() - gap) / 2.0;
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = gap;
+                for b in [true, false] {
+                    if mode_tile(ui, &t, b, basic == b, wdt).clicked() {
+                        acts.push(Act::Mode(b));
+                    }
+                }
+            });
+            ui.add_space(8.0);
+            ui.label(w::faint(
+                &t,
+                concat!("Switch from anywhere with ", shortcut!("Shift T"), "."),
+            ));
+        },
+    );
+
+    section(
+        ui,
+        &t,
         "Categories",
         "Colours and icons show up everywhere — charts, budgets and the ledger.",
         |ui| {
@@ -385,7 +385,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                             let h = motion::toggle(ui.ctx(), Id::new(("cat-set", c.id)), resp.hovered(), motion::MICRO);
                             let p = ui.painter();
                             if h > 0.0 {
-                                p.rect_filled(r, CornerRadius::same(8), motion::with_alpha(t.hover, h));
+                                p.rect_filled(r, CornerRadius::same(8), motion::with_alpha(t.hover_wash(), h));
                             }
                             let badge =
                                 Rect::from_min_size(pos2(r.left() + 6.0, r.center().y - 13.0), vec2(26.0, 26.0));
@@ -659,12 +659,16 @@ fn fmt_rate(r: f64) -> String {
 /// A miniature rendering of a theme.
 /// One mode to choose: its preview, name and tagline.
 fn mode_tile(ui: &mut Ui, t: &Theme, basic: bool, selected: bool, width: f32) -> egui::Response {
-    let (r, resp) = ui.allocate_exact_size(vec2(width, 150.0), Sense::click());
+    let (r, resp) = ui.allocate_exact_size(vec2(width, 128.0), Sense::click());
     crate::marks::record(|| format!("mode:{}", crate::modes::mode(basic).name), r);
     let h = motion::toggle(ui.ctx(), Id::new(("mode-tile-h", basic)), resp.hovered(), motion::MICRO);
     let s = motion::toggle(ui.ctx(), Id::new(("mode-tile-s", basic)), selected, motion::STANDARD);
     let p = ui.painter();
-    let fill = motion::lerp_color(motion::lerp_color(t.card, t.hover, h * 0.6), t.accent_soft(), s);
+    let fill = motion::lerp_color(
+        motion::lerp_color(t.card, t.hovered(t.card), h * 0.6),
+        t.accent_soft(),
+        s,
+    );
     p.rect(
         r,
         CornerRadius::same(12),
@@ -691,11 +695,10 @@ fn mode_tile(ui: &mut Ui, t: &Theme, basic: bool, selected: bool, width: f32) ->
         theme::semibold(15.0),
         t.text,
     );
-    let g = p.layout(m.tagline.to_string(), theme::medium(13.0), t.text, text_w);
-    let tag_h = g.size().y;
-    p.galley(pos2(x, inner.top() + 24.0), g, t.text);
-    let g = p.layout(m.detail.to_string(), theme::regular(12.5), t.text2, text_w);
-    p.galley(pos2(x, inner.top() + 30.0 + tag_h), g, t.text2);
+    if !m.more.is_empty() {
+        let g = p.layout(m.more.to_string(), theme::regular(12.5), t.text2, text_w);
+        p.galley(pos2(x, inner.top() + 26.0), g, t.text2);
+    }
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 

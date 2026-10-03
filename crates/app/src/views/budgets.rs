@@ -146,7 +146,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 .iter()
                 .filter(|c| c.kind == CategoryKind::Expense && !c.archived && store.budget_plan(c.id).is_none())
                 .collect();
-            w::dropdown(ui, "budget-add", format!("{}  Add budget", ph::PLUS), 180.0, |ui| {
+            w::dropdown(ui, "budget-add", format!("{}  Add budget", ph::PLUS), 210.0, |ui| {
                 if w::option(
                     ui,
                     false,
@@ -466,7 +466,7 @@ fn budget_row(
     let p = ui.painter().clone();
     let a = |c: egui::Color32| motion::with_alpha(c, alpha);
     if h > 0.0 {
-        p.rect_filled(rect, CornerRadius::same(12), a(motion::with_alpha(t.hover, h)));
+        p.rect_filled(rect, CornerRadius::same(12), a(motion::with_alpha(t.hover_wash(), h)));
     }
     if selected {
         p.rect_stroke(

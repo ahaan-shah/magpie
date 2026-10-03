@@ -83,7 +83,7 @@ crates/app   (magpie-finance) the eframe app; binary `magpie`
 |---|---|
 | `main.rs` | CLI flags, data dir, renderer choice (Windows: glow, then wgpu fallback), `fatal()` dialog, window options (vsync off, see below) |
 | `app.rs` | `App` struct, frame loop, crash shield, shortcuts, sidebar (incl. update prompt), top bar, modal host, `Memo`, `open_external`/`open_url`, logo painter |
-| `theme.rs` | 14 themes (7 light, 7 dark) as token structs, crossfade, 9 bundled fonts (`FONTS`, `install_fonts`) |
+| `theme.rs` | 16 themes (8 light, 8 dark; Magpie Light/Dark are the defaults and the sidebar toggle) as token structs, crossfade, 9 bundled fonts (`FONTS`, `install_fonts`) |
 | `motion.rs` | tween/appear/toggle helpers and durations (`MICRO` 0.12s, `STANDARD` 0.22, `EMPHASIS` 0.42, `CHART` 0.7) |
 | `widgets/mod.rs` | buttons, cards (`card_in`, `card_scroll`), `grid_row`, inputs, `dropdown` + `option`/`option_value` (all menu rows), date picker, `spin_button`, `paint_circle_arrows`, progress |
 | `widgets/charts.rs` | custom-painted charts: area (monotone cubic), grouped/stacked bars, donut, ring, sparkline, heatmap; `axis()` nice-step helper; collision-aware x labels |
@@ -116,6 +116,9 @@ crates/app   (magpie-finance) the eframe app; binary `magpie`
   faster for 100k rows.
 - **`axis()` for every chart scale.** An early bug computed steps from the max
   only and spun the CPU and allocated gigabytes. Use the helper.
+- **Hover shading uses `t.hover_wash()` / `t.hovered(base)`**, a touch of
+  the text colour. The `hover` token nearly matches cards and popups in many
+  themes, so hovers drawn with it were invisible.
 - **Hover by geometry** (`ui.rect_contains_pointer(rect)`) where widgets
   overlap; `resp.hovered()` caused an edit-button flicker on Accounts (there's
   a regression test).
@@ -140,8 +143,10 @@ crates/app   (magpie-finance) the eframe app; binary `magpie`
   Basic is a view. `Page::nav(basic)` / `in_basic()` decide the sidebar,
   `App::go` redirects Advanced-only pages to Home, and views branch on
   `app.basic()` (Home in `dashboard::show_basic`, a separate
-  `basic_ledger`, smaller forms). `Ctrl Shift T` toggles; it must be
-  checked before `Ctrl T` (egui lets Ctrl+T match Ctrl+Shift+T). Anything
+  `basic_ledger`, smaller forms). `Ctrl Shift T` (and Settings) toggle via
+  `set_basic`, which fades the whole app out, switches while hidden
+  (`apply_basic`, snapping the sidebar), and fades back in. Check it before
+  `Ctrl T` (egui lets Ctrl+T match Ctrl+Shift+T). Anything
   Advanced creates (transfers, other currencies, rollover, tags) must still
   read sensibly in Basic, and hidden form fields keep their values.
   New features: decide if they belong in Basic, and keep Basic small.

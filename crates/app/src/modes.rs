@@ -10,24 +10,24 @@ use std::f32::consts::{PI, TAU};
 
 pub struct Mode {
     pub name: &'static str,
-    /// A few words for the choice itself.
-    pub short: &'static str,
     pub tagline: &'static str,
     pub detail: &'static str,
+    /// What it has beyond Basic, for Settings (empty for Basic itself).
+    pub more: &'static str,
 }
 
 pub const BASIC: Mode = Mode {
     name: "Basic",
-    short: "Fewer pages, plainer words",
     tagline: "Everyday money, made simple.",
     detail: "Home, transactions, budgets and accounts. Just what you need, nothing you don't.",
+    more: "",
 };
 
 pub const ADVANCED: Mode = Mode {
     name: "Advanced",
-    short: "Everything Magpie can do",
     tagline: "Every insight, total control.",
     detail: "Adds reports, recurring bills, savings goals, transfers, tags and other currencies.",
+    more: "Adds reports, recurring bills, goals, transfers, tags and other currencies.",
 };
 
 pub fn mode(basic: bool) -> &'static Mode {

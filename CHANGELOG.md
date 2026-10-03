@@ -11,12 +11,24 @@ All notable changes to Magpie are documented here. The format follows
   Transactions, Budgets, Accounts), plainer words, and a shorter Add
   transaction form (amount, what it was for, category, date). Everything
   else is Advanced mode, which is Magpie as it was. Switch any time in
-  Settings → App mode, from the sidebar, or with `Ctrl Shift T`; both modes
-  show the same data.
+  Settings → App mode or with `Ctrl Shift T`; both modes show the same data.
 - New users choose Basic or Advanced when they first open Magpie, with a
   preview of each.
 - Make account cards your own: besides the colour, pick an icon and a look
   (Simple, Tinted or Bold), with a live preview as you edit.
+- A Magpie theme in light and dark, in the brand's soft orange, beige,
+  green and blue. The sidebar's light/dark button now switches between them,
+  and new installs start in Magpie Dark.
+
+### Changed
+- Creating a category that already exists (in any capitalisation) uses the
+  existing one instead of showing an error.
+
+### Fixed
+- Hovering a row in dropdowns and menus shades it again; the shade was
+  nearly invisible in most themes. Buttons and list rows hover more clearly
+  too.
+- "New category…" in Budgets → Add budget no longer gets cut off.
 - `install.sh --uninstall` (`curl … | sh -s -- --uninstall`) removes Magpie
   on Linux and macOS and keeps your data.
 

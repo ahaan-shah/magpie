@@ -102,6 +102,12 @@ pub fn tween(ctx: &Context, id: Id, target: f32, dur: f32) -> f32 {
     value
 }
 
+/// Forgets a [`tween`]/[`toggle`]'s state, so its next value jumps straight
+/// to the target (for changes made out of sight).
+pub fn snap(ctx: &Context, id: Id) {
+    ctx.data_mut(|d| d.remove::<Tween>(id.with("tween")));
+}
+
 /// Like [`tween`] but starts from `from` the first time it's seen — used for
 /// things that should animate in on first appearance (chart bars growing).
 pub fn tween_from(ctx: &Context, id: Id, from: f32, target: f32, dur: f32) -> f32 {

@@ -227,9 +227,7 @@ fn mode_step(ui: &mut Ui, t: &Theme, st: &mut State, full: Rect, dy: f32) -> boo
                             .font(theme::display(24.0))
                             .color(t.text),
                     );
-                    ui.add_space(4.0);
-                    ui.label(w::subtle(t, "Pick what suits you. Nothing is lost either way."));
-                    ui.add_space(22.0);
+                    ui.add_space(24.0);
                     for basic in [true, false] {
                         if option_row(ui, t, basic, st.basic == basic, left_w).clicked() {
                             st.basic = basic;
@@ -237,10 +235,12 @@ fn mode_step(ui: &mut Ui, t: &Theme, st: &mut State, full: Rect, dy: f32) -> boo
                         ui.add_space(10.0);
                     }
                     ui.add_space(2.0);
-                    ui.label(w::faint(
-                        t,
-                        concat!("Switch any time in Settings, or with ", shortcut!("Shift T"), "."),
-                    ));
+                    ui.allocate_ui_with_layout(vec2(left_w, 20.0), egui::Layout::top_down(egui::Align::Center), |ui| {
+                        ui.label(w::faint(
+                            t,
+                            concat!("Switch any time in Settings, or with ", shortcut!("Shift T"), "."),
+                        ))
+                    });
                     // Back and Begin sit at the bottom of the column.
                     let col = ui.max_rect();
                     let row = Rect::from_min_max(pos2(col.left(), col.bottom() - 36.0), col.max);
@@ -269,13 +269,13 @@ fn mode_step(ui: &mut Ui, t: &Theme, st: &mut State, full: Rect, dy: f32) -> boo
 
 /// One of the two choices: a radio, the mode's name and a few words.
 fn option_row(ui: &mut Ui, t: &Theme, basic: bool, selected: bool, width: f32) -> egui::Response {
-    let (r, resp) = ui.allocate_exact_size(vec2(width, 68.0), Sense::click());
+    let (r, resp) = ui.allocate_exact_size(vec2(width, 54.0), Sense::click());
     crate::marks::record(|| format!("onb:{}", modes::mode(basic).name), r);
     let ctx = ui.ctx();
     let h = motion::toggle(ctx, Id::new(("onb-opt-h", basic)), resp.hovered(), motion::MICRO);
     let s = motion::toggle(ctx, Id::new(("onb-opt-s", basic)), selected, motion::STANDARD);
     let p = ui.painter();
-    let fill = motion::lerp_color(motion::lerp_color(t.card, t.hover, h), t.accent_soft(), s);
+    let fill = motion::lerp_color(motion::lerp_color(t.card, t.hovered(t.card), h), t.accent_soft(), s);
     let edge = motion::lerp_color(t.border, t.accent, s);
     p.rect(
         r,
@@ -291,18 +291,11 @@ fn option_row(ui: &mut Ui, t: &Theme, basic: bool, selected: bool, width: f32) -
     }
     let m = modes::mode(basic);
     p.text(
-        pos2(r.left() + 42.0, r.center().y - 10.0),
+        pos2(r.left() + 42.0, r.center().y),
         Align2::LEFT_CENTER,
         m.name,
         theme::semibold(15.0),
         t.text,
-    );
-    p.text(
-        pos2(r.left() + 42.0, r.center().y + 11.0),
-        Align2::LEFT_CENTER,
-        m.short,
-        theme::regular(12.5),
-        t.text2,
     );
     resp.on_hover_cursor(egui::CursorIcon::PointingHand)
 }

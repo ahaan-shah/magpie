@@ -371,7 +371,7 @@ fn paint_row(
 ) {
     let p = ui.painter();
     if hover > 0.0 {
-        p.rect_filled(r, CornerRadius::same(10), motion::with_alpha(t.hover, hover));
+        p.rect_filled(r, CornerRadius::same(10), motion::with_alpha(t.hover_wash(), hover));
     }
     let cur = store.account_cur(tx.account);
     let cat = tx.category.and_then(|c| store.category(c));

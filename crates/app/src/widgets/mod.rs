@@ -222,7 +222,7 @@ pub fn button(ui: &mut Ui, t: &Theme, kind: Kind, icon: Option<&str>, label: &st
                 motion::lerp_color(t.border, motion::with_alpha(t.accent, 0.6), hover),
             ),
         ),
-        Kind::Ghost => (motion::with_alpha(t.hover, hover), Stroke::NONE),
+        Kind::Ghost => (motion::with_alpha(t.hover_wash(), hover), Stroke::NONE),
         Kind::Danger => (
             motion::lerp_color(t.tint(t.neg, 0.08), t.tint(t.neg, 0.18), hover),
             Stroke::new(1.0, motion::with_alpha(t.neg, 0.35)),
@@ -386,7 +386,7 @@ pub fn icon_button(ui: &mut Ui, t: &Theme, glyph: &str, tip: &str) -> Response {
     let hover = motion::toggle(ui.ctx(), resp.id, resp.hovered(), motion::MICRO);
     if ui.is_rect_visible(rect) {
         let p = ui.painter();
-        p.rect_filled(rect, CornerRadius::same(8), motion::with_alpha(t.hover, hover * 1.0));
+        p.rect_filled(rect, CornerRadius::same(8), motion::with_alpha(t.hover_wash(), hover));
         p.text(
             rect.center(),
             Align2::CENTER_CENTER,
@@ -662,7 +662,9 @@ pub fn option(ui: &mut Ui, selected: bool, text: impl Into<egui::WidgetText>) ->
                 accent,
             );
         } else if hover > 0.0 {
-            p.rect_filled(rect, radius, motion::with_alpha(v.widgets.inactive.bg_fill, hover));
+            // A touch of the text colour, which shows on any popup.
+            let wash = if v.dark_mode { 0.075 } else { 0.06 };
+            p.rect_filled(rect, radius, motion::with_alpha(v.text_color(), wash * hover));
         }
         let pos = egui::pos2(rect.left() + pad, rect.center().y - galley.size().y / 2.0);
         p.galley(pos, galley, v.text_color());
@@ -790,7 +792,7 @@ pub fn calendar(ui: &mut Ui, t: &Theme, id: Id, date: &mut Date) -> bool {
         let bg = if sel {
             t.accent
         } else if resp.hovered() {
-            t.hover
+            t.hover_wash()
         } else {
             Color32::TRANSPARENT
         };

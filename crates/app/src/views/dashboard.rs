@@ -676,7 +676,7 @@ fn categories_card(ui: &mut Ui, t: &Theme, store: &Store, d: &Dash, acts: &mut V
             p.rect_filled(
                 r.expand2(vec2(4.0, 0.0)),
                 CornerRadius::same(6),
-                motion::with_alpha(t.hover, hl),
+                motion::with_alpha(t.hover_wash(), hl),
             );
         }
         p.circle_filled(pos2(r.left() + 5.0, r.center().y), 4.0, s.color);
@@ -917,7 +917,7 @@ pub fn list_row(ui: &mut Ui, t: &Theme, id: Id, paint: impl FnOnce(&mut Ui, Rect
         ui.painter().rect_filled(
             rect.expand2(vec2(8.0, 0.0)),
             CornerRadius::same(10),
-            motion::with_alpha(t.hover, h),
+            motion::with_alpha(t.hover_wash(), h),
         );
     }
     paint(ui, rect);
@@ -947,7 +947,7 @@ fn goals_card(ui: &mut Ui, t: &Theme, d: &Dash, basic: bool, acts: &mut Vec<Act>
             ui.painter().rect_filled(
                 rect.expand2(vec2(8.0, 0.0)),
                 CornerRadius::same(10),
-                motion::with_alpha(t.hover, h),
+                motion::with_alpha(t.hover_wash(), h),
             );
         }
         let color = w::cat_color(g.color);
