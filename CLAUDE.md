@@ -180,7 +180,7 @@ crates/app   (magpie-finance) the eframe app; binary `magpie`
 - **Website** (`site/`, plain HTML/CSS/JS, no build step): published to
   GitHub Pages by `.github/workflows/pages.yml` on pushes touching `site/`.
   Colours are the Magpie Light/Dark tokens; fonts are self-hosted subset
-  woff2s (Fraunces headings, Figtree text), so there are no third-party
+  woff2s of two of the app's fonts (Plus Jakarta Sans headings, Figtree text), so no third-party
   requests. Screenshots are the tour rendered in the Magpie themes (and the
   dashboard in eight themes for "Make it yours"), as WebP; the video is the v5 launch
   film re-encoded (CRF 26, ~15 MB). The testimonials (five, in a card deck)

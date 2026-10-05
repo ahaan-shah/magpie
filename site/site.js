@@ -80,8 +80,6 @@ document.querySelectorAll(".deck").forEach((deck) => {
     if (label) {
       const c = cards[at];
       label.querySelector("span").textContent = c.dataset.name;
-      label.style.setProperty("--sw-bg", c.style.getPropertyValue("--bg"));
-      label.style.setProperty("--sw-ac", c.style.getPropertyValue("--ac"));
     }
   }
   function go(step) {
