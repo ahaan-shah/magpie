@@ -6,7 +6,7 @@ your line when the work is merged.
 
 | Topic | Branch | Areas / files | Status |
 |---|---|---|---|
-| _(none active)_ | | | |
+| 0.2.3 fixes: % of income, start on Home, category type-ahead, statement preamble, RAM | agent/fixes-023 | dashboard.rs, app.rs (startup page), forms.rs/widgets dropdown, core statement.rs | in progress |
 
 ## Reserved
 
