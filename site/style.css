@@ -15,14 +15,9 @@
   --line: rgba(43, 38, 34, .09);
   --wash: rgba(43, 38, 34, .045);
   --tint: 7%;
-  --glow1: rgba(240, 150, 100, .30);
-  --glow2: rgba(175, 155, 235, .24);
-  --glow3: rgba(245, 190, 110, .20);
-  --wave1: #E8935F;
-  --wave2: #A994E6;
-  --wave3: #F0B870;
-  --wave-fill: .16;
-  --wave-line: .22;
+  --glow1: rgba(232, 140, 85, .26);
+  --glow2: rgba(232, 140, 85, .16);
+  --glow3: rgba(240, 170, 110, .18);
   color-scheme: light;
   --shadow: 0 1px 2px rgba(60, 40, 20, .06), 0 12px 40px -12px rgba(60, 40, 20, .22);
   --code-bg: #2B2622;
@@ -40,14 +35,9 @@
     --line: rgba(237, 230, 220, .09);
     --wash: rgba(237, 230, 220, .05);
     --tint: 5%;
-    --glow1: rgba(228, 129, 79, .16);
-    --glow2: rgba(130, 115, 220, .14);
-    --glow3: rgba(214, 160, 90, .08);
-    --wave1: #E4814F;
-    --wave2: #8D7BE0;
-    --wave3: #D9A15E;
-    --wave-fill: .13;
-    --wave-line: .16;
+    --glow1: rgba(228, 129, 79, .14);
+    --glow2: rgba(228, 129, 79, .08);
+    --glow3: rgba(228, 129, 79, .07);
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 16px 48px -16px rgba(0, 0, 0, .6);
     --code-bg: #0F1318;
     --code-text: #EDE6DC;
@@ -65,14 +55,9 @@
   --line: rgba(237, 230, 220, .09);
   --wash: rgba(237, 230, 220, .05);
   --tint: 5%;
-  --glow1: rgba(228, 129, 79, .16);
-  --glow2: rgba(130, 115, 220, .14);
-  --glow3: rgba(214, 160, 90, .08);
-  --wave1: #E4814F;
-  --wave2: #8D7BE0;
-  --wave3: #D9A15E;
-  --wave-fill: .13;
-  --wave-line: .16;
+  --glow1: rgba(228, 129, 79, .14);
+  --glow2: rgba(228, 129, 79, .08);
+  --glow3: rgba(228, 129, 79, .07);
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 16px 48px -16px rgba(0, 0, 0, .6);
   --code-bg: #0F1318;
   --code-text: #EDE6DC;
@@ -96,7 +81,7 @@ body {
     color-mix(in srgb, var(--card) 60%, var(--bg)) 75%,
     color-mix(in srgb, var(--accent) var(--tint), var(--bg)) 100%);
 }
-/* The warm haze from the launch film, drifting very slowly. */
+/* A soft orange haze, drifting very slowly. */
 body::before {
   content: "";
   position: fixed;
@@ -114,24 +99,6 @@ body::before {
   from { transform: translate3d(0, 0, 0) scale(1); }
   to { transform: translate3d(-3%, 2%, 0) scale(1.06); }
 }
-/* Gradient waves in Magpie's orange, lavender and gold, sliding sideways. */
-section { position: relative; }
-.wave {
-  position: absolute; z-index: -1; pointer-events: none;
-  left: 50%; width: 100vw; margin-left: -50vw; height: 300px;
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-}
-.wave-strip { width: 200%; height: 100%; animation: slide 90s linear infinite; will-change: transform; }
-.wave-strip polygon { opacity: var(--wave-fill); }
-.wave-strip .contours { fill: none; stroke: var(--wave2); stroke-width: 1.4; opacity: var(--wave-line); vector-effect: non-scaling-stroke; }
-.w-hero { top: 340px; }
-.w-mid { top: 20px; }
-.w-mid .wave-strip { animation-duration: 120s; animation-direction: reverse; }
-.w-low { top: 40px; }
-.w-low .wave-strip { animation-duration: 105s; }
-@keyframes slide { to { transform: translate3d(-50%, 0, 0); } }
 
 a { color: var(--accent-text); text-decoration: none; }
 a:hover { text-decoration: underline; text-underline-offset: 3px; }
@@ -340,7 +307,7 @@ footer a { color: var(--text2); }
   html { scroll-behavior: auto; }
   .js .reveal { opacity: 1; transform: none; transition: none; }
   .frames img, .deck .card { transition: none; }
-  body::before, .wave-strip { animation: none; }
+  body::before { animation: none; }
 }
 
 @media (max-width: 860px) {
