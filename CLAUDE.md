@@ -119,6 +119,19 @@ crates/app   (magpie-finance) the eframe app; binary `magpie`
 - **Hover shading uses `t.hover_wash()` / `t.hovered(base)`**, a touch of
   the text colour. The `hover` token nearly matches cards and popups in many
   themes, so hovers drawn with it were invisible.
+- **Type-to-find menus and suggestions:** `w::dropdown_ex(…, keep_open)`
+  lets a list hold a search field (`forms::category_picker`); rows lit by
+  the keyboard use `w::option_lit`. A popup's first frame is laid out
+  unseen and drops `request_focus`, so keep asking until the field has
+  focus. Read arrow keys and Enter with `consume_key` *before* drawing the
+  text field (payee suggestions), or the field moves its cursor and the
+  modal footer treats Enter as Save.
+- **Statement import finds the transaction block first:** the first run of
+  rows with a date and an amount, then the nearest label-only row above it
+  (skipping blanks and `****`/`----` rules) is the header. Preamble cells
+  that mention dates ("Statement From: 01/09/2026 … A/C Open Date") used to
+  win as the header. Test with made-up data shaped like a real file; never
+  commit a real statement.
 - **Hover by geometry** (`ui.rect_contains_pointer(rect)`) where widgets
   overlap; `resp.hovered()` caused an edit-button flicker on Accounts (there's
   a regression test).
@@ -254,6 +267,16 @@ from the README until they're actually published. The PKGBUILD and cask in
   Signing later). An in-app update on Windows swaps `magpie.exe` but leaves
   the version shown in Settings → Apps at the installed one until the next
   installer run.
+- **RAM (looked at for 0.2.3, nothing changed):** on the maintainer's
+  laptop RSS is ~200 MB right after launch, but only ~40 MB is Magpie's own
+  memory (`Private_Dirty` in `/proc/<pid>/smaps_rollup`). The rest is shared
+  driver code: Mesa (gallium + LLVM), plus NVIDIA's EGL libraries that
+  glvnd loads while probing even though Magpie renders on the Intel GPU.
+  Check `VmSwap` before trusting a long-running instance's numbers (an
+  idle one had 40 MB swapped out and looked tiny). Restricting EGL vendors
+  would break NVIDIA-only machines, so it wasn't done. The maintainer said
+  it's fine if RAM can't go lower; a fair before/after comparison is still
+  to do if anyone tries.
 - **Later, not started:** publishing to AUR (`magpie-finance` and a
   `-bin`) and a Homebrew tap (`ahaan-shah/homebrew-tap`), with CI bumping
   them per release; Apple notarization (needs a Developer account); code
