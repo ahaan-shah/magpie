@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Magpie — calm, local-first personal finance</title>
+<title>Magpie — a calm way to manage your money</title>
 <meta name="description" content="A fast, beautiful, local-first personal finance app for Linux, macOS and Windows. Budgets, accounts, recurring bills, goals and reports. No account, no telemetry.">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#F7F2EA" media="(prefers-color-scheme: light)">
@@ -12,8 +12,9 @@
 <meta property="og:description" content="Calm, local-first personal finance for Linux, macOS and Windows.">
 <meta property="og:image" content="https://ahaan-shah.github.io/magpie/media/dashboard-light.webp">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="preload" href="fonts/Inter-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/Figtree-Regular.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/InterDisplay-SemiBold.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/Parisienne-Regular.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -21,25 +22,21 @@
 <header class="top">
   <a class="brand" href="#"><img src="icon.svg" alt="" width="28" height="28"> Magpie</a>
   <nav>
-    <a href="#tour">Tour</a>
-    <a href="#film">Film</a>
+    <a href="#tour">Features</a>
     <a href="#install">Install</a>
-    <a class="gh" href="https://github.com/ahaan-shah/magpie">GitHub</a>
+    <a href="#film">Video</a>
+    <a class="gh" href="https://github.com/ahaan-shah/magpie"><svg viewBox="0 0 16 16" width="17" height="17" aria-hidden="true"><path fill="currentColor" d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg><span>GitHub</span></a>
   </nav>
 </header>
 
 <main>
 
 <section class="hero">
-  <img class="hero-icon" src="icon.svg" alt="" width="88" height="88">
-  <h1>Your money,<br>calmly in order.</h1>
-  <p class="lede">Magpie is a fast, beautiful personal finance app that lives on your computer.
-    Budgets, accounts, bills and goals, with no account and no cloud.</p>
+  <img class="hero-icon" src="icon.svg" alt="" width="128" height="128">
+  <h1>A <em class="calm">calm</em> way to manage your money</h1>
   <div class="cta">
     <a class="btn primary" href="#install">Install Magpie</a>
-    <a class="btn ghost" href="#film">Watch the film</a>
   </div>
-  <p class="platforms">Free and open source · Linux, macOS and Windows</p>
   <figure class="shot hero-shot reveal">
     <picture>
       <source srcset="media/dashboard-dark.webp" media="(prefers-color-scheme: dark)">
@@ -56,7 +53,7 @@
 </section>
 
 <section id="tour" class="tour">
-  <h2 class="reveal">A quick look around</h2>
+  <h2 class="reveal">Take a quick look around</h2>
   <div class="tour-body reveal">
     <div class="tabs" role="tablist" aria-label="Pages">
       <button role="tab" aria-selected="false" data-i="0">Transactions</button>
@@ -76,28 +73,14 @@
         <img src="media/goals-light.webp" alt="Goals" width="1880" height="1240" loading="lazy">
       </div>
       <p class="caption" aria-live="polite"></p>
+      <p class="aside">Sixteen themes and nine fonts, so it looks the way you like.</p>
     </div>
-  </div>
-  <p class="aside reveal">Sixteen themes and nine fonts, so it looks the way you like.</p>
-</section>
-
-<section id="film" class="film">
-  <h2 class="reveal">Ninety seconds of Magpie</h2>
-  <div class="video shot reveal">
-    <video controls preload="none" playsinline poster="media/launch-poster.jpg" width="1920" height="1080">
-      <source src="media/launch.mp4" type="video/mp4">
-    </video>
   </div>
 </section>
 
 <section id="install" class="install">
   <h2 class="reveal">Install in one line</h2>
-  <p class="sub reveal">Paste this into a terminal. It downloads the latest release, checks it, and puts Magpie in your apps.</p>
   <div class="installer reveal">
-    <div class="seg" role="tablist" aria-label="Platform">
-      <button role="tab" data-os="unix" aria-selected="true">Linux &amp; macOS</button>
-      <button role="tab" data-os="win" aria-selected="false">Windows</button>
-    </div>
     <div class="cmd" data-os="unix">
       <span class="prompt">$</span>
       <code>curl -fsSL https://raw.githubusercontent.com/ahaan-shah/magpie/main/install.sh | sh</code>
@@ -108,32 +91,43 @@
       <code>irm https://raw.githubusercontent.com/ahaan-shah/magpie/main/install.ps1 | iex</code>
       <button class="copy" type="button">Copy</button>
     </div>
-    <p class="note" data-os="unix">Works on x86_64 and ARM. Run the same line again to update, or let Magpie update itself.</p>
-    <p class="note" data-os="win" hidden>Run it in PowerShell. Installs for just you, no admin needed.</p>
+    <p class="note">
+      <span data-os="unix">Paste this in your terminal</span><span data-os="win" hidden>Paste this in PowerShell</span>
+      <span class="dot">·</span>
+      <button class="switch" type="button" data-os="unix">On Windows?</button><button class="switch" type="button" data-os="win" hidden>On macOS or Linux?</button>
+    </p>
   </div>
-  <p class="alt reveal">Rather click? Get the <a href="https://github.com/ahaan-shah/magpie/releases/latest">.dmg, setup .exe or tarball</a> from the latest release.</p>
+</section>
+
+<section id="film" class="film">
+  <h2 class="reveal">Magpie in 90 seconds</h2>
+  <div class="video shot reveal">
+    <video controls preload="none" playsinline poster="media/launch-poster.jpg" width="1920" height="1080">
+      <source src="media/launch.mp4" type="video/mp4">
+    </video>
+  </div>
 </section>
 
 <section class="quotes">
   <h2 class="reveal">What people are definitely saying</h2>
-  <div class="grid">
-    <figure class="quote reveal"><blockquote>“I opened it and it was already open. I’ve never felt so seen.”</blockquote><figcaption><b>Gerald P.</b>Closes laptops with authority</figcaption></figure>
-    <figure class="quote reveal"><blockquote>“0% CPU when idle. Finally, software that relates to me.”</blockquote><figcaption><b>Dev, Senior Engineer</b>On paid leave since 2024</figcaption></figure>
-    <figure class="quote reveal"><blockquote>“It says I spent $412 on coffee this month. I have decided the app is wrong.”</blockquote><figcaption><b>Doug R.</b>Vice President of Denial</figcaption></figure>
-    <figure class="quote reveal"><blockquote>“No account, no cloud, no telemetry. My bank doesn’t know I use it. My bank barely knows I exist.”</blockquote><figcaption><b>Anonymous</b>Wears a tinfoil hat, professionally</figcaption></figure>
-    <figure class="quote reveal"><blockquote>“Blazingly fast. I watched my savings disappear at 144 frames per second.”</blockquote><figcaption><b>Priya S.</b>Budget enthusiast, budget ignorer</figcaption></figure>
-    <figure class="quote reveal"><blockquote>“The pacing line is the only line I have ever respected.”</blockquote><figcaption><b>Kevin</b>Skipped three queues today</figcaption></figure>
-    <figure class="quote reveal"><blockquote>“Basic mode taught me about money. Advanced mode taught me about fear.”</blockquote><figcaption><b>Tom W.</b>Toggled with Ctrl Shift T, regrets nothing</figcaption></figure>
-    <figure class="quote reveal"><blockquote>“I imported three years of bank statements. Magpie found the columns. My therapist is handling the rest.”</blockquote><figcaption><b>Linda K.</b>Fourteen streaming services</figcaption></figure>
-    <figure class="quote reveal"><blockquote>“Five stars. I checked with my accountant, who is also me.”</blockquote><figcaption><b>Sole Proprietor</b>Of mostly vibes</figcaption></figure>
+  <div class="carousel reveal" aria-roledescription="carousel" aria-label="Made-up testimonials">
+    <div class="track" title="Next">
+      <figure class="slide"><blockquote>“I opened it and it was already open. I’ve never felt so seen.”</blockquote><figcaption><b>Gerald P.</b> · Closes laptops with authority</figcaption></figure>
+      <figure class="slide"><blockquote>“0% CPU when idle. Finally, software that relates to me.”</blockquote><figcaption><b>Dev, Senior Engineer</b> · On paid leave since 2024</figcaption></figure>
+      <figure class="slide"><blockquote>“It says I spent $412 on coffee this month. I have decided the app is wrong.”</blockquote><figcaption><b>Doug R.</b> · Vice President of Denial</figcaption></figure>
+      <figure class="slide"><blockquote>“Blazingly fast. I watched my savings disappear at 144 frames per second.”</blockquote><figcaption><b>Priya S.</b> · Budget enthusiast, budget ignorer</figcaption></figure>
+      <figure class="slide"><blockquote>“Five stars. I checked with my accountant, who is also me.”</blockquote><figcaption><b>Sole Proprietor</b> · Of mostly vibes</figcaption></figure>
+    </div>
+    <div class="dots"><button type="button" aria-label="Testimonial 1"></button><button type="button" aria-label="Testimonial 2"></button><button type="button" aria-label="Testimonial 3"></button><button type="button" aria-label="Testimonial 4"></button><button type="button" aria-label="Testimonial 5"></button></div>
   </div>
   <p class="fine reveal">Testimonials are made up. The app is real.</p>
 </section>
 
-<section class="closing reveal">
-  <img src="icon.svg" alt="" width="64" height="64">
-  <h2>Give your money a calm home.</h2>
-  <a class="btn primary" href="#install">Install Magpie</a>
+<section class="maker reveal">
+  <a href="https://github.com/ahaan-shah">
+    <img src="media/ahaan.jpg" alt="" width="64" height="64">
+    <span><small>Made by</small><b>Ahaan Shah</b><span class="handle">github.com/ahaan-shah</span></span>
+  </a>
 </section>
 
 </main>

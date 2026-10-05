@@ -29,12 +29,11 @@ document.querySelector(".tabs").addEventListener("keydown", (e) => {
 });
 show(0);
 
-// Install: pick the visitor's platform, copy on click.
+// Install: show the visitor's platform; a quiet link switches.
 function pick(os) {
-  document.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.os === os)));
-  document.querySelectorAll(".installer [data-os]:not(button)").forEach((el) => (el.hidden = el.dataset.os !== os));
+  document.querySelectorAll(".installer [data-os]").forEach((el) => (el.hidden = el.dataset.os !== os));
 }
-document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => pick(b.dataset.os)));
+document.querySelectorAll(".switch").forEach((b) => b.addEventListener("click", () => pick(b.dataset.os === "win" ? "unix" : "win")));
 if (/Win/i.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent)) pick("win");
 
 document.querySelectorAll(".copy").forEach((btn) => {
@@ -54,6 +53,45 @@ document.querySelectorAll(".copy").forEach((btn) => {
     btn._t = setTimeout(() => (btn.textContent = "Copy"), 1600);
   });
 });
+
+// Testimonials: slide left every few seconds; click for the next one.
+const track = document.querySelector(".track");
+const slides = [...track.children];
+const dots = [...document.querySelectorAll(".dots button")];
+track.appendChild(slides[0].cloneNode(true)).setAttribute("aria-hidden", "true");
+const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let at = 0;
+let timer;
+function snapHome() {
+  track.classList.add("snap");
+  at = 0;
+  track.style.transform = "translateX(0%)";
+  track.offsetWidth;
+  track.classList.remove("snap");
+}
+function go(i) {
+  // Sitting on the copy of the first quote: jump back to the real one unseen first.
+  if (at >= slides.length) {
+    snapHome();
+    if (i >= slides.length) i -= slides.length;
+  }
+  at = Math.min(i, slides.length);
+  track.style.transform = `translateX(${-100 * at}%)`;
+  dots.forEach((d, j) => d.setAttribute("aria-current", String(j === at % slides.length)));
+  restart();
+}
+track.addEventListener("transitionend", () => at >= slides.length && snapHome());
+function restart() {
+  clearTimeout(timer);
+  if (!still) timer = setTimeout(() => !document.hidden && go(at + 1), 5500);
+}
+track.addEventListener("click", () => go(still ? (at + 1) % slides.length : at + 1));
+dots.forEach((d, i) => d.addEventListener("click", () => go(i)));
+const carousel = document.querySelector(".carousel");
+carousel.addEventListener("mouseenter", () => clearTimeout(timer));
+carousel.addEventListener("mouseleave", restart);
+document.addEventListener("visibilitychange", restart);
+go(0);
 
 // Soft entrance on scroll; a quiet border on the top bar once you've moved.
 const io = new IntersectionObserver(

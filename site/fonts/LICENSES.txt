@@ -1,0 +1,7 @@
+Fonts used by this site, all under the SIL Open Font License 1.1 (OFL), subset to Latin.
+
+InterDisplay  Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter) — see Inter-LICENSE.txt
+Figtree       Copyright 2022 The Figtree Project Authors (https://github.com/erikdkennedy/figtree)
+Parisienne    Copyright 2012 Astigmatic (AOETI) (http://www.astigmatic.com/)
+
+Full licence text: https://openfontlicense.org/open-font-license-official-text/
