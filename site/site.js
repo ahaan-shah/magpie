@@ -1,5 +1,41 @@
 document.documentElement.classList.add("js");
 
+// Light/dark: follows the system until you pick one with the switch.
+const root = document.documentElement;
+const systemDark = matchMedia("(prefers-color-scheme: dark)");
+const themeMeta = document.querySelector('meta[name="theme-color"]');
+function isDark() {
+  return root.dataset.theme ? root.dataset.theme === "dark" : systemDark.matches;
+}
+function syncTheme() {
+  const dark = isDark();
+  root.toggleAttribute("data-dark", dark);
+  themeMeta.content = dark ? "#161B22" : "#F7F2EA";
+}
+// What the switch is heading to, so quick clicks during the crossfade stay in step.
+let wantDark = isDark();
+systemDark.addEventListener("change", () => {
+  syncTheme();
+  wantDark = isDark();
+});
+syncTheme();
+document.querySelector(".mode").addEventListener("click", () => {
+  wantDark = !wantDark;
+  const next = wantDark ? "dark" : "light";
+  const flip = () => {
+    // Back to following the system when the pick matches it.
+    if ((next === "dark") === systemDark.matches) delete root.dataset.theme;
+    else root.dataset.theme = next;
+    try {
+      if (root.dataset.theme) localStorage.setItem("theme", root.dataset.theme);
+      else localStorage.removeItem("theme");
+    } catch {}
+    syncTheme();
+  };
+  if (document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.startViewTransition(flip);
+  else flip();
+});
+
 // Tour: a sidebar like the app's, crossfading between pages.
 const captions = [
   "Type “coffee 4.50 @Blue Bottle yesterday” and it’s filed. Or import your bank’s CSV, Excel or OFX.",

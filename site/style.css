@@ -15,14 +15,21 @@
   --line: rgba(43, 38, 34, .09);
   --wash: rgba(43, 38, 34, .045);
   --tint: 7%;
-  --glow1: rgba(240, 160, 110, .20);
-  --glow2: rgba(190, 170, 230, .14);
+  --glow1: rgba(240, 150, 100, .30);
+  --glow2: rgba(175, 155, 235, .24);
+  --glow3: rgba(245, 190, 110, .20);
+  --wave1: #E8935F;
+  --wave2: #A994E6;
+  --wave3: #F0B870;
+  --wave-fill: .16;
+  --wave-line: .22;
+  color-scheme: light;
   --shadow: 0 1px 2px rgba(60, 40, 20, .06), 0 12px 40px -12px rgba(60, 40, 20, .22);
   --code-bg: #2B2622;
   --code-text: #F3ECE2;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #161B22;
     --card: #1C222B;
     --text: #EDE6DC;
@@ -33,12 +40,43 @@
     --line: rgba(237, 230, 220, .09);
     --wash: rgba(237, 230, 220, .05);
     --tint: 5%;
-    --glow1: rgba(228, 129, 79, .10);
-    --glow2: rgba(120, 110, 200, .08);
+    --glow1: rgba(228, 129, 79, .16);
+    --glow2: rgba(130, 115, 220, .14);
+    --glow3: rgba(214, 160, 90, .08);
+    --wave1: #E4814F;
+    --wave2: #8D7BE0;
+    --wave3: #D9A15E;
+    --wave-fill: .13;
+    --wave-line: .16;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 16px 48px -16px rgba(0, 0, 0, .6);
     --code-bg: #0F1318;
     --code-text: #EDE6DC;
+    color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #161B22;
+  --card: #1C222B;
+  --text: #EDE6DC;
+  --text2: #B2A99D;
+  --text3: #7D7A76;
+  --accent: #E4814F;
+  --accent-text: #EC9568;
+  --line: rgba(237, 230, 220, .09);
+  --wash: rgba(237, 230, 220, .05);
+  --tint: 5%;
+  --glow1: rgba(228, 129, 79, .16);
+  --glow2: rgba(130, 115, 220, .14);
+  --glow3: rgba(214, 160, 90, .08);
+  --wave1: #E4814F;
+  --wave2: #8D7BE0;
+  --wave3: #D9A15E;
+  --wave-fill: .13;
+  --wave-line: .16;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 16px 48px -16px rgba(0, 0, 0, .6);
+  --code-bg: #0F1318;
+  --code-text: #EDE6DC;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -58,17 +96,43 @@ body {
     color-mix(in srgb, var(--card) 60%, var(--bg)) 75%,
     color-mix(in srgb, var(--accent) var(--tint), var(--bg)) 100%);
 }
-/* The warm haze from the launch film. */
+/* The warm haze from the launch film, drifting very slowly. */
 body::before {
   content: "";
   position: fixed;
-  inset: 0;
-  z-index: -1;
+  inset: -10%;
+  z-index: -2;
   pointer-events: none;
   background:
-    radial-gradient(60vw 50vh at 15% 0%, var(--glow1), transparent 70%),
-    radial-gradient(50vw 50vh at 90% 30%, var(--glow2), transparent 70%);
+    radial-gradient(42vw 38vh at 12% 8%, var(--glow1), transparent 70%),
+    radial-gradient(38vw 40vh at 88% 22%, var(--glow2), transparent 70%),
+    radial-gradient(40vw 34vh at 70% 88%, var(--glow3), transparent 70%),
+    radial-gradient(34vw 30vh at 18% 70%, var(--glow2), transparent 70%);
+  animation: haze 48s ease-in-out infinite alternate;
 }
+@keyframes haze {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-3%, 2%, 0) scale(1.06); }
+}
+/* Gradient waves in Magpie's orange, lavender and gold, sliding sideways. */
+section { position: relative; }
+.wave {
+  position: absolute; z-index: -1; pointer-events: none;
+  left: 50%; width: 100vw; margin-left: -50vw; height: 300px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+.wave-strip { width: 200%; height: 100%; animation: slide 90s linear infinite; will-change: transform; }
+.wave-strip polygon { opacity: var(--wave-fill); }
+.wave-strip .contours { fill: none; stroke: var(--wave2); stroke-width: 1.4; opacity: var(--wave-line); vector-effect: non-scaling-stroke; }
+.w-hero { top: 340px; }
+.w-mid { top: 20px; }
+.w-mid .wave-strip { animation-duration: 120s; animation-direction: reverse; }
+.w-low { top: 40px; }
+.w-low .wave-strip { animation-duration: 105s; }
+@keyframes slide { to { transform: translate3d(-50%, 0, 0); } }
+
 a { color: var(--accent-text); text-decoration: none; }
 a:hover { text-decoration: underline; text-underline-offset: 3px; }
 img, video { display: block; max-width: 100%; height: auto; }
@@ -97,6 +161,19 @@ section { padding: 72px 16px; max-width: 1160px; margin: 0 auto; }
 .top nav { display: flex; align-items: center; gap: 6px; }
 .top nav a { color: var(--text2); font-size: 15px; padding: 6px 12px; border-radius: 8px; transition: background .15s, color .15s; }
 .top nav a:hover { background: var(--wash); color: var(--text); text-decoration: none; }
+.mode {
+  appearance: none; border: 0; cursor: pointer; background: transparent; color: var(--text2);
+  width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center;
+  transition: background .15s, color .15s;
+}
+.mode:hover { background: var(--wash); color: var(--text); }
+.mode:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mode svg { grid-area: 1 / 1; transition: transform .45s cubic-bezier(.3, .7, .2, 1), opacity .3s; }
+.mode .sun, [data-dark] .mode .moon { opacity: 0; transform: rotate(-60deg) scale(.6); }
+[data-dark] .mode .sun { opacity: 1; transform: none; }
+.only-dark, [data-dark] .only-light { display: none; }
+[data-dark] .only-dark { display: block; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .45s; }
 .top nav a.gh { display: inline-flex; align-items: center; gap: 7px; margin-left: 6px; color: var(--text); border: 1px solid var(--line); background: var(--card); }
 
 /* Hero */
@@ -263,6 +340,7 @@ footer a { color: var(--text2); }
   html { scroll-behavior: auto; }
   .js .reveal { opacity: 1; transform: none; transition: none; }
   .frames img, .deck .card { transition: none; }
+  body::before, .wave-strip { animation: none; }
 }
 
 @media (max-width: 860px) {
