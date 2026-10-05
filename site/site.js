@@ -107,7 +107,10 @@ let glide = 0;
 function glideTo(target) {
   const barH = document.querySelector(".top").offsetHeight;
   const from = scrollY;
-  const to = Math.max(0, Math.min(target.getBoundingClientRect().top + from - barH - 8, document.documentElement.scrollHeight - innerHeight));
+  // Land a section's heading just under the top bar, so the whole section is in view.
+  const anchor = target.querySelector(":scope > h2") || target;
+  const gap = anchor === target ? 8 : 20;
+  const to = Math.max(0, Math.min(anchor.getBoundingClientRect().top + from - barH - gap, document.documentElement.scrollHeight - innerHeight));
   const dist = to - from;
   if (still || Math.abs(dist) < 2) return scrollTo({ top: to, behavior: "instant" });
   const ms = Math.min(1300, 550 + Math.abs(dist) * 0.25);
