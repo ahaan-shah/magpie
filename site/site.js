@@ -102,6 +102,38 @@ document.querySelectorAll(".deck").forEach((deck) => {
   restart();
 });
 
+// In-page links glide to their section instead of jumping, and stop if you scroll yourself.
+let glide = 0;
+function glideTo(target) {
+  const barH = document.querySelector(".top").offsetHeight;
+  const from = scrollY;
+  const to = Math.max(0, Math.min(target.getBoundingClientRect().top + from - barH - 8, document.documentElement.scrollHeight - innerHeight));
+  const dist = to - from;
+  if (still || Math.abs(dist) < 2) return scrollTo({ top: to, behavior: "instant" });
+  const ms = Math.min(1300, 550 + Math.abs(dist) * 0.25);
+  const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const id = ++glide;
+  const t0 = performance.now();
+  const step = (now) => {
+    if (id !== glide) return;
+    const t = Math.min(1, (now - t0) / ms);
+    scrollTo({ top: from + dist * ease(t), behavior: "instant" });
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+["wheel", "touchstart", "keydown"].forEach((ev) => addEventListener(ev, () => glide++, { passive: true }));
+document.addEventListener("click", (e) => {
+  const a = e.target.closest('a[href^="#"]');
+  if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+  const id = a.getAttribute("href").slice(1);
+  const target = id ? document.getElementById(id) : document.body;
+  if (!target) return;
+  e.preventDefault();
+  history.pushState(null, "", id ? `#${id}` : location.pathname);
+  glideTo(target);
+});
+
 // Soft entrance on scroll; a quiet border on the top bar once you've moved.
 const io = new IntersectionObserver(
   (entries) => entries.forEach((e) => e.isIntersecting && (e.target.classList.add("in"), io.unobserve(e.target))),
