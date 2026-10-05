@@ -933,6 +933,41 @@ fn stills() {
         img.save(&path).expect("save");
         eprintln!("stills: wrote {path}");
 
+        // Typing narrows the list and lights the best match.
+        step(&mut app, vec![Event::Text("gro".into())], t + 0.02);
+        let mut last = None;
+        for _ in 0..20 {
+            t += 1.0 / 60.0;
+            last = Some(step(&mut app, vec![Event::PointerMoved(pos2(1200.0, 780.0))], t).0);
+        }
+        let path = format!("{out}/dropdown-search-{}.png", theme.to_lowercase());
+        last.expect("frame").save(&path).expect("save");
+        eprintln!("stills: wrote {path}");
+        // Enter takes it and closes the list.
+        let enter = Event::Key {
+            key: egui::Key::Enter,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        };
+        step(&mut app, vec![enter], t + 0.02);
+        let mut last = None;
+        for _ in 0..20 {
+            t += 1.0 / 60.0;
+            last = Some(step(&mut app, Vec::new(), t).0);
+        }
+        let path = format!("{out}/dropdown-picked-{}.png", theme.to_lowercase());
+        last.expect("frame").save(&path).expect("save");
+        eprintln!("stills: wrote {path}");
+        if let Some(crate::forms::Modal::Txn(f)) = &app.modal {
+            let name = f
+                .category_id()
+                .and_then(|c| app.store.category(c))
+                .map(|c| c.name.clone());
+            assert_eq!(name.as_deref(), Some("Groceries"), "typing gro + Enter picks Groceries");
+        }
+
         // The sidebar's update prompt.
         step(
             &mut app,
@@ -960,6 +995,25 @@ fn stills() {
         let path = format!("{out}/update-{}.png", theme.to_lowercase());
         last.expect("frame").save(&path).expect("save");
         eprintln!("stills: wrote {path}");
+
+        // A first month, with nothing before it to compare against.
+        let dir = std::env::temp_dir().join(format!("magpie-stills-first-{theme}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut store = magpie_core::Store::open(&dir).expect("store");
+        magpie_core::demo::generate(&mut store, magpie_core::Cur::USD, 1, 0).expect("demo");
+        store.update_settings(|s| s.theme = theme.into()).expect("theme");
+        let ctx = Context::default();
+        let mut app = App::with_context(&ctx, None, store);
+        let mut shots = Shots {
+            ctx,
+            size: vec2(1280.0, 800.0),
+            renderer: WgpuTestRenderer::new(),
+            t: 0.0,
+            out: out.clone(),
+            suffix: theme.to_lowercase(),
+        };
+        let img = shots.settle(&mut app, 120);
+        shots.save(img, "dashboard-first-month");
 
         // First run: a brand-new, empty workspace shows onboarding.
         let dir = std::env::temp_dir().join(format!("magpie-stills-new-{theme}"));

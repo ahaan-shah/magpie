@@ -202,6 +202,40 @@ pub fn account_picker(
     });
 }
 
+/// What's typed into an open category list, and which match the keyboard is on.
+#[derive(Clone, Default)]
+struct CatSearch {
+    query: String,
+    lit: usize,
+    /// Arrows were used, so Enter means the lit row even with nothing typed.
+    nav: bool,
+    started: bool,
+    /// The field has had keyboard focus; until then keep asking for it (a
+    /// popup's first frame is laid out unseen and drops the request).
+    focused: bool,
+}
+
+/// How well a category name matches what's typed: lower is better, `None`
+/// for no match. Starts of the name beat starts of a word beat anywhere.
+fn cat_match(name: &str, query: &str) -> Option<u8> {
+    let q = query.trim().to_lowercase();
+    if q.is_empty() {
+        return Some(0);
+    }
+    let n = name.to_lowercase();
+    if n.starts_with(&q) {
+        Some(0)
+    } else if n.split(|c: char| !c.is_alphanumeric()).any(|w| w.starts_with(&q)) {
+        Some(1)
+    } else if n.contains(&q) {
+        Some(2)
+    } else {
+        None
+    }
+}
+
+/// The category dropdown. Typing while it's open (or while it has keyboard
+/// focus) narrows the list; Enter takes the top match, arrows move.
 pub fn category_picker(
     ui: &mut Ui,
     t: &Theme,
@@ -218,33 +252,190 @@ pub fn category_picker(
         None => egui::RichText::new("Uncategorized").color(t.text2).into(),
     };
     let key = format!("picker:{id:?}");
-    let resp = w::dropdown(ui, id, label, width, |ui| {
-        w::option_value(ui, sel, None, egui::RichText::new("Uncategorized").color(t.text2));
-        for k in [CategoryKind::Expense, CategoryKind::Income] {
-            if kind.is_some_and(|x| x != k) {
-                continue;
-            }
-            ui.add_space(8.0);
-            ui.horizontal(|ui| {
-                ui.add_space(10.0);
-                ui.label(
-                    egui::RichText::new(if k == CategoryKind::Expense {
-                        "EXPENSES"
-                    } else {
-                        "INCOME"
-                    })
-                    .font(theme::semibold(10.5))
-                    .color(t.text3),
-                );
-            });
-            ui.add_space(2.0);
-            for c in store.categories().iter().filter(|c| c.kind == k && !c.archived) {
-                let text = egui::RichText::new(format!("{}  {}", icons::glyph(&c.icon), c.name))
-                    .color(w::readable(t, w::cat_color(c.color)));
-                w::option_value(ui, sel, Some(c.id), text);
+    let ctx = ui.ctx().clone();
+    let popup_id = w::dropdown_popup_id(ui, &id);
+    let state_id = popup_id.with("search");
+    let mut open = false;
+    let resp = w::dropdown_ex(ui, id, label, width, true, |ui, _| {
+        open = true;
+        let mut st: CatSearch = ui.data(|d| d.get_temp(state_id)).unwrap_or_default();
+        let field_id = state_id.with("field");
+        // The frame it opens, keys belong to whatever opened it (Enter on the field).
+        let first = !st.started;
+        st.started = true;
+        if !st.focused {
+            if ui.memory(|m| m.has_focus(field_id)) {
+                st.focused = true;
+            } else {
+                ui.memory_mut(|m| m.request_focus(field_id));
             }
         }
+
+        // The search line: quiet, just a glyph and the text.
+        let before = st.query.clone();
+        ui.horizontal(|ui| {
+            ui.add_space(10.0);
+            ui.label(
+                egui::RichText::new(ph::MAGNIFYING_GLASS)
+                    .font(theme::regular(13.0))
+                    .color(t.text3),
+            );
+            ui.add(
+                egui::TextEdit::singleline(&mut st.query)
+                    .id(field_id)
+                    .frame(egui::Frame::NONE)
+                    .hint_text(egui::RichText::new("Type to find").color(t.text3))
+                    .desired_width(ui.available_width() - 16.0),
+            );
+        });
+        if st.query != before {
+            st.lit = 0;
+        }
+        ui.add_space(4.0);
+
+        // Matches, best first; with nothing typed, the usual grouped list.
+        let searching = !st.query.trim().is_empty();
+        let mut matches: Vec<(u8, &magpie_core::Category)> = store
+            .categories()
+            .iter()
+            .filter(|c| !c.archived && kind.is_none_or(|k| c.kind == k))
+            .filter_map(|c| cat_match(&c.name, &st.query).map(|r| (r, c)))
+            .collect();
+        matches.sort_by_key(|(r, _)| *r);
+        let picks: Vec<Option<RowId>> = if searching {
+            matches.iter().map(|(_, c)| Some(c.id)).collect()
+        } else {
+            std::iter::once(None)
+                .chain([CategoryKind::Expense, CategoryKind::Income].into_iter().flat_map(|k| {
+                    matches
+                        .iter()
+                        .filter(move |(_, c)| c.kind == k)
+                        .map(|(_, c)| Some(c.id))
+                }))
+                .collect()
+        };
+
+        let (down, up, enter, esc) = ui.input_mut(|i| {
+            if first {
+                return (false, false, false, false);
+            }
+            (
+                i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown),
+                i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp),
+                i.consume_key(egui::Modifiers::NONE, egui::Key::Enter),
+                i.consume_key(egui::Modifiers::NONE, egui::Key::Escape),
+            )
+        });
+        let moved = down || up;
+        st.nav |= moved;
+        if !picks.is_empty() {
+            if down {
+                st.lit = (st.lit + 1).min(picks.len() - 1);
+            }
+            if up {
+                st.lit = st.lit.saturating_sub(1);
+            }
+            st.lit = st.lit.min(picks.len() - 1);
+        }
+        let mut chosen = None;
+        let engaged = searching || st.nav;
+        if enter
+            && engaged
+            && let Some(p) = picks.get(st.lit)
+        {
+            chosen = Some(*p);
+        }
+
+        let mut row = 0;
+        let mut item = |ui: &mut Ui, pick: Option<RowId>, text: egui::RichText, chosen: &mut Option<Option<RowId>>| {
+            let lit = engaged && row == st.lit;
+            let r = w::option_lit(ui, *sel == pick, lit, text);
+            if lit && moved {
+                r.scroll_to_me(None);
+            }
+            if r.clicked() {
+                *chosen = Some(pick);
+            }
+            row += 1;
+        };
+        if searching {
+            if matches.is_empty() {
+                ui.horizontal(|ui| {
+                    ui.add_space(10.0);
+                    ui.label(w::faint(t, "No category matches"));
+                });
+            }
+            for (_, c) in &matches {
+                let text = egui::RichText::new(format!("{}  {}", icons::glyph(&c.icon), c.name))
+                    .color(w::readable(t, w::cat_color(c.color)));
+                item(ui, Some(c.id), text, &mut chosen);
+            }
+        } else {
+            item(
+                ui,
+                None,
+                egui::RichText::new("Uncategorized").color(t.text2),
+                &mut chosen,
+            );
+            for k in [CategoryKind::Expense, CategoryKind::Income] {
+                if kind.is_some_and(|x| x != k) {
+                    continue;
+                }
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    ui.add_space(10.0);
+                    ui.label(
+                        egui::RichText::new(if k == CategoryKind::Expense {
+                            "EXPENSES"
+                        } else {
+                            "INCOME"
+                        })
+                        .font(theme::semibold(10.5))
+                        .color(t.text3),
+                    );
+                });
+                ui.add_space(2.0);
+                for (_, c) in matches.iter().filter(|(_, c)| c.kind == k) {
+                    let text = egui::RichText::new(format!("{}  {}", icons::glyph(&c.icon), c.name))
+                        .color(w::readable(t, w::cat_color(c.color)));
+                    item(ui, Some(c.id), text, &mut chosen);
+                }
+            }
+        }
+
+        if let Some(pick) = chosen {
+            *sel = pick;
+        }
+        if chosen.is_some() || esc || enter {
+            egui::Popup::close_id(ui.ctx(), popup_id);
+            ui.data_mut(|d| d.remove::<CatSearch>(state_id));
+        } else {
+            ui.data_mut(|d| d.insert_temp(state_id, st));
+        }
     });
+    // Typing on the closed field (reached with Tab) opens it with that text.
+    if !open && resp.response.has_focus() {
+        let typed: String = ctx.input(|i| {
+            i.events
+                .iter()
+                .filter_map(|e| match e {
+                    egui::Event::Text(s) => Some(s.as_str()),
+                    _ => None,
+                })
+                .collect()
+        });
+        if !typed.trim().is_empty() {
+            egui::Popup::open_id(&ctx, popup_id);
+            let st = CatSearch {
+                query: typed,
+                ..Default::default()
+            };
+            ctx.data_mut(|d| d.insert_temp(state_id, st));
+        }
+    } else if !open {
+        // Closed by a click outside: start fresh next time.
+        ctx.data_mut(|d| d.remove::<CatSearch>(state_id));
+    }
     crate::marks::record(|| key, resp.response.rect);
 }
 
@@ -350,6 +541,12 @@ impl TxnForm {
             f.mode = 0;
         }
         f
+    }
+
+    /// The chosen category, for the stills.
+    #[cfg(test)]
+    pub fn category_id(&self) -> Option<RowId> {
+        self.category
     }
 
     /// A payback filled in, for the stills.

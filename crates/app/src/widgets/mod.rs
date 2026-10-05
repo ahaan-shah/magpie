@@ -615,9 +615,28 @@ pub fn dropdown<R>(
     width: f32,
     add: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<Option<R>> {
+    dropdown_ex(ui, id, selected, width, false, |ui, _| add(ui))
+}
+
+/// The id of a dropdown's list, for opening or closing it from outside.
+pub fn dropdown_popup_id(ui: &Ui, id: impl std::hash::Hash + std::fmt::Debug) -> Id {
+    ui.make_persistent_id(id).with("popup")
+}
+
+/// [`dropdown`] with a say in closing: with `keep_open` a click inside the
+/// list (say, on a search field) leaves it open, and the content closes it
+/// itself with `egui::Popup::close_id` on the popup id it's handed.
+pub fn dropdown_ex<R>(
+    ui: &mut Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    selected: impl Into<egui::WidgetText>,
+    width: f32,
+    keep_open: bool,
+    add: impl FnOnce(&mut Ui, Id) -> R,
+) -> egui::InnerResponse<Option<R>> {
     let v = ui.visuals().clone();
+    let popup_id = dropdown_popup_id(ui, &id);
     let id = ui.make_persistent_id(id);
-    let popup_id = id.with("popup");
     let open = egui::Popup::is_id_open(ui.ctx(), popup_id);
     let pad = ui.spacing().button_padding;
     let galley = selected.into().into_galley(
@@ -665,14 +684,18 @@ pub fn dropdown<R>(
         .id(popup_id)
         .width(width)
         .gap(gap)
-        .close_behavior(egui::PopupCloseBehavior::CloseOnClick)
+        .close_behavior(if keep_open {
+            egui::PopupCloseBehavior::CloseOnClickOutside
+        } else {
+            egui::PopupCloseBehavior::CloseOnClick
+        })
         .show(|ui| {
             ui.set_min_width(ui.available_width());
             scroll_area()
                 .max_height(max_h)
                 .show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 2.0;
-                    add(ui)
+                    add(ui, popup_id)
                 })
                 .inner
         })
@@ -689,6 +712,11 @@ const MENU_GUTTER: f32 = 12.0;
 /// so it works in any theme without passing one in. Drop-in for
 /// `Ui::selectable_label`.
 pub fn option(ui: &mut Ui, selected: bool, text: impl Into<egui::WidgetText>) -> egui::Response {
+    option_lit(ui, selected, false, text)
+}
+
+/// [`option`] that can also be lit as if hovered: the row the keyboard is on.
+pub fn option_lit(ui: &mut Ui, selected: bool, lit: bool, text: impl Into<egui::WidgetText>) -> egui::Response {
     let v = ui.visuals().clone();
     let accent = v.selection.stroke.color;
     let pad = 10.0;
@@ -703,7 +731,7 @@ pub fn option(ui: &mut Ui, selected: bool, text: impl Into<egui::WidgetText>) ->
     let height = (galley.size().y + 14.0).max(32.0);
     let (rect, resp) = ui.allocate_exact_size(vec2(width, height), Sense::click());
     if ui.is_rect_visible(rect) {
-        let hover = motion::toggle(ui.ctx(), resp.id.with("hover"), resp.hovered(), motion::MICRO);
+        let hover = motion::toggle(ui.ctx(), resp.id.with("hover"), resp.hovered() || lit, motion::MICRO);
         let p = ui.painter();
         let radius = CornerRadius::same(8);
         if selected {

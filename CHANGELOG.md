@@ -11,6 +11,24 @@ All notable changes to Magpie are documented here. The format follows
   update button was. It opens a card with the changes in a few plain points
   (with a picture where it helps), and goes away once you move to another
   page. Settings → About links to the full release notes.
+- Category type-ahead: with the category list open (or focused with Tab),
+  type to narrow it ("gro" finds Groceries); Enter picks the top match,
+  arrow keys move, Esc closes.
+
+### Changed
+- Magpie always opens on Home (Dashboard), whichever page was open when it
+  was closed.
+- Statement import finds where the transactions start in more files: it
+  looks for the first run of rows with a date and an amount and takes the
+  label row just above as the header, skipping blank lines and rules of
+  stars or dashes. Banks that put account details, statement dates or
+  addresses above the table (HDFC's .xls, for one) now map correctly.
+
+### Fixed
+- Dashboard: in a first month (nothing last month to compare with), the
+  Spent, Income and Saved tiles all said the same "% of income". Spent now
+  shows its share of income, Income says "So far this month", and Saved
+  shows the savings rate.
 
 ## [0.2.2] - 2026-10-03
 

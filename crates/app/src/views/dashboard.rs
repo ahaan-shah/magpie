@@ -214,13 +214,22 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                         "Set up budgets to see this".into()
                     };
                     ui.label(w::faint(&t, per_day));
-                } else if let Some(r) = d.this.savings_rate() {
-                    let text = if r < -1.0 {
-                        "more out than in so far".to_string()
-                    } else {
-                        format!("{:.0}% of income", r * 100.0)
+                } else {
+                    // No last month to compare with: each tile says something of its own.
+                    let income = d.this.income;
+                    let text = match i {
+                        0 if income > 0 => format!("{:.0}% of income", d.this.expense as f64 / income as f64 * 100.0),
+                        1 => "So far this month".to_string(),
+                        2 => match d.this.savings_rate() {
+                            Some(r) if r < -1.0 => "More out than in so far".to_string(),
+                            Some(r) => format!("{:.0}% of income", r * 100.0),
+                            None => String::new(),
+                        },
+                        _ => String::new(),
                     };
-                    ui.label(w::faint(&t, text));
+                    if !text.is_empty() {
+                        ui.label(w::faint(&t, text));
+                    }
                 }
             })
         });

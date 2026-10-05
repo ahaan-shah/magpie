@@ -362,46 +362,65 @@ fn has_date_cell(row: &[String]) -> bool {
         .any(|c| DateFormat::ALL.iter().any(|f| parse_date(c, *f).is_some()))
 }
 
+/// A blank row, or a line drawn with dashes, stars or equals signs.
+fn is_rule(row: &[String]) -> bool {
+    row.iter().all(|c| !c.chars().any(char::is_alphanumeric))
+}
+
 const DATE_KEYS: &[&str] = &["date", "posted", "time", "dt", "datum", "fecha", "buchung"];
 
 /// Reads a statement's first rows and guesses where the data starts and
 /// which column is which, from header names and cell contents.
 pub fn preview(path: &Path) -> Result<CsvPreview> {
     let table = read_table(path)?;
-    let look = &table[..table.len().min(60)];
+    let look = &table[..table.len().min(200)];
     let lower = |c: &String| c.to_lowercase();
-    // A header row: several labels, one of them date-like, and no dates.
+    let filled = |r: &[String]| r.iter().filter(|c| !c.trim().is_empty()).count();
+    let is_amount_cell = |c: &String| parse_amount(c, Cur::USD).is_some() && !has_date_cell(std::slice::from_ref(c));
+    // A transaction looks the same in any bank's file: a date and an amount.
+    let txn_like = |r: &[String]| filled(r) >= 2 && has_date_cell(r) && r.iter().any(is_amount_cell);
+    // A row of labels: no dates, no numbers.
+    let labels = |r: &[String]| filled(r) >= 2 && !has_date_cell(r) && !r.iter().any(is_amount_cell);
+    // A header row by name: several labels, one of them date-like, and no dates.
     let header_at = look.iter().position(|r| {
-        r.iter().filter(|c| !c.is_empty()).count() >= 2
+        filled(r) >= 2
             && r.iter().any(|c| {
                 let c = lower(c);
                 c.len() < 40 && DATE_KEYS.iter().any(|k| c.contains(k))
             })
             && !has_date_cell(r)
     });
-    let first_data = look
+    // The first transaction is the first date-and-amount row with another
+    // close below it, so a lone "Statement date: 01/09/2026, 12.00" in the
+    // account details above doesn't count.
+    let txns: Vec<usize> = (0..look.len()).filter(|&i| txn_like(&look[i])).collect();
+    let first_data = txns
         .iter()
-        .position(|r| r.iter().filter(|c| !c.is_empty()).count() >= 2 && has_date_cell(r));
-    // Any language: a row of labels (no dates, no numbers) right above the
-    // first transaction is its header.
-    let labels_above = |d: usize| {
-        d > 0 && {
-            let r = &look[d - 1];
-            r.iter().filter(|c| !c.is_empty()).count() >= 2
-                && !has_date_cell(r)
-                && r.iter().all(|c| c.is_empty() || parse_amount(c, Cur::USD).is_none())
-        }
+        .copied()
+        .find(|&d| txns.iter().any(|&e| e > d && e <= d + 4))
+        .or(txns.first().copied())
+        .or_else(|| look.iter().position(|r| filled(r) >= 2 && has_date_cell(r)));
+    // Its header is the nearest row above it that isn't blank or a rule of
+    // dashes or stars, if that row is all labels (any language). Preamble
+    // lines like "Statement From: …  A/C Open Date: …" sit further up.
+    let header_above = |d: usize| {
+        (d.saturating_sub(8)..d)
+            .rev()
+            .find(|&i| !is_rule(&look[i]))
+            .filter(|&i| labels(&look[i]))
     };
     let (skip, has_header) = match (header_at, first_data) {
-        (Some(h), Some(d)) if h < d => (h, true),
-        (_, Some(d)) if labels_above(d) => (d - 1, true),
-        (_, Some(d)) => (d, false),
+        (_, Some(d)) => match header_above(d) {
+            Some(h) => (h, true),
+            None => (d, false),
+        },
         (Some(h), None) => (h, true),
         (None, None) => (0, false),
     };
     let data: Vec<Vec<String>> = table
         .iter()
         .skip(skip + has_header as usize)
+        .filter(|r| !is_rule(r))
         .take(200)
         .cloned()
         .collect();
@@ -719,6 +738,46 @@ mod tests {
         assert_eq!(pv.rows.len(), 3);
         let row = &pv.rows[0];
         assert_eq!(row_amount(row, g, Cur::USD), Some(-45_000));
+    }
+
+    #[test]
+    fn long_preamble_with_dates_and_rules() {
+        // Shaped like an HDFC .xls export: account details in two columns,
+        // preamble cells that mention dates, star rules around the header.
+        let dir = tempfile::tempdir().unwrap();
+        let p = write(
+            &dir,
+            "statement.csv",
+            b"HDFC BANK Ltd.   Page No .: 1   Statement of accounts,,,,,,\n\
+              ,,,,Account Branch :SOMEWHERE,,\n\
+              MR. A N OTHER,,,,City :MUMBAI 400012,,\n\
+              Opening date,01/04/2016,,,OD Limit,0.00,\n\
+              Statement From  :  01/09/2026   To  :  30/09/2026,,,,A/C Open Date :18/07/2016,,\n\
+              ,,,,Account Status :Regular,,\n\
+              ****************************,,,,,,\n\
+              Date,Narration,Chq./Ref.No.,Value Dt,Withdrawal Amt.,Deposit Amt.,Closing Balance\n\
+              ********,********,********,********,********,********,********\n\
+              31/08/26,UPI-FRIEND-friend@oksbi,0000624372902480,01/09/26,,100,15228.83\n\
+              01/09/26,UPI-PAI TIFFINS-q899@ybl,0000128828452125,01/09/26,200,,15028.83\n\
+              02/09/26,UPI-BLINKIT-blinkit.payu@hdfcbank,0000128894379529,02/09/26,247,,14781.83\n\
+              ********,********,********,********,********,********,********\n\
+              STATEMENT SUMMARY  :-,,,,,,\n\
+              Opening Balance,,,,Debits,Credits,Closing Bal\n\
+              15128.83,,,,447,100,14781.83\n",
+        );
+        let pv = preview(&p).unwrap();
+        let g = &pv.guess;
+        assert_eq!((g.skip, g.has_header, g.date), (7, true, 0));
+        assert_eq!(pv.headers[1], "Narration");
+        assert_eq!(
+            (g.payee, g.debit, g.credit, g.amount),
+            (Some(1), Some(4), Some(5), None)
+        );
+        assert_eq!(g.date_format, DateFormat::Dmy);
+        // The rule under the header isn't shown as a row.
+        assert_eq!(pv.rows[0][0], "31/08/26");
+        assert_eq!(row_amount(&pv.rows[0], g, Cur::USD), Some(10_000));
+        assert_eq!(row_amount(&pv.rows[1], g, Cur::USD), Some(-20_000));
     }
 
     #[test]

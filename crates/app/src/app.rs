@@ -157,7 +157,6 @@ const FRAME_CAP: f32 = 144.0;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) struct Persisted {
-    page: Page,
     collapsed: bool,
 }
 
@@ -196,14 +195,10 @@ impl App {
         }
         let onboarding = (store.is_empty() || !store.settings().onboarded).then(views::onboarding::State::new);
         let whats_new = crate::whatsnew::State::new(&mut store);
-        let page = persisted
-            .as_ref()
-            .map(|p| p.page)
-            .filter(|p| !store.settings().basic || p.in_basic())
-            .unwrap_or(Page::Dashboard);
         let mut app = App {
             theme,
-            page,
+            // Always open on Home, whatever page was showing at quit.
+            page: Page::Dashboard,
             shown_at: 0.0,
             today,
             toasts,
@@ -1146,7 +1141,6 @@ impl eframe::App for App {
             storage,
             "magpie",
             &Persisted {
-                page: self.page,
                 collapsed: self.collapsed,
             },
         );

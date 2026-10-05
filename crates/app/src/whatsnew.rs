@@ -33,13 +33,29 @@ pub struct Notes {
 /// and why it helps, not how it works.
 pub const RELEASES: &[Notes] = &[Notes {
     version: "0.2.3",
-    items: &[Item {
-        icon: ph::SPARKLE,
-        title: "See what's new after each update",
-        body: "When Magpie updates, this card shows what changed in a few words. \
+    items: &[
+        Item {
+            icon: ph::SPARKLE,
+            title: "See what's new after each update",
+            body: "When Magpie updates, this card shows what changed in a few words. \
                You can find the full notes any time in Settings.",
-        image: None,
-    }],
+            image: None,
+        },
+        Item {
+            icon: ph::KEYBOARD,
+            title: "Pick a category by typing",
+            body: "Open the category list and type a few letters, like \"gro\" for Groceries. \
+               Press Enter to pick it.",
+            image: None,
+        },
+        Item {
+            icon: ph::FILE_ARROW_DOWN,
+            title: "More bank statements import cleanly",
+            body: "Statements with lots of account details above the transactions now \
+               import without any fixing up.",
+            image: None,
+        },
+    ],
 }];
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
