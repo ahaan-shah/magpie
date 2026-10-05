@@ -6,7 +6,7 @@ your line when the work is merged.
 
 | Topic | Branch | Areas / files | Status |
 |---|---|---|---|
-| 0.2.4: payee arrow keys, What's new stays until seen | agent/fixes-024 | forms.rs (payee suggestions), app.rs (go), whatsnew.rs | in progress |
+| _(none active)_ | | | |
 
 ## Reserved
 

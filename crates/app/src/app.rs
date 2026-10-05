@@ -314,8 +314,6 @@ impl App {
             page
         };
         if self.page != page {
-            // Moving to another page puts "What's new" away.
-            self.whats_new.dismiss(&mut self.store);
             crate::diag::crumb(format!("go {page:?}"));
             self.page = page;
             self.shown_at = ctx.input(|i| i.time);

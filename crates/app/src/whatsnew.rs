@@ -31,32 +31,53 @@ pub struct Notes {
 
 /// Newest first. Keep each to 2–4 points in everyday words: what changed
 /// and why it helps, not how it works.
-pub const RELEASES: &[Notes] = &[Notes {
-    version: "0.2.3",
-    items: &[
-        Item {
-            icon: ph::SPARKLE,
-            title: "See what's new after each update",
-            body: "When Magpie updates, this card shows what changed in a few words. \
+pub const RELEASES: &[Notes] = &[
+    Notes {
+        version: "0.2.4",
+        items: &[
+            Item {
+                icon: ph::KEYBOARD,
+                title: "Pick a payee with the arrow keys",
+                body: "As you type a payee, use the arrow keys to move through the suggestions \
+                       and press Enter to pick one.",
+                image: None,
+            },
+            Item {
+                icon: ph::GIFT,
+                title: "What's new waits for you",
+                body: "The What's new button stays in the sidebar until you've opened it, \
+                       even if you move around the app first.",
+                image: None,
+            },
+        ],
+    },
+    Notes {
+        version: "0.2.3",
+        items: &[
+            Item {
+                icon: ph::SPARKLE,
+                title: "See what's new after each update",
+                body: "When Magpie updates, this card shows what changed in a few words. \
                You can find the full notes any time in Settings.",
-            image: None,
-        },
-        Item {
-            icon: ph::KEYBOARD,
-            title: "Pick a category by typing",
-            body: "Open the category list and type a few letters, like \"gro\" for Groceries. \
+                image: None,
+            },
+            Item {
+                icon: ph::KEYBOARD,
+                title: "Pick a category by typing",
+                body: "Open the category list and type a few letters, like \"gro\" for Groceries. \
                Press Enter to pick it.",
-            image: None,
-        },
-        Item {
-            icon: ph::FILE_ARROW_DOWN,
-            title: "More bank statements import cleanly",
-            body: "Statements with lots of account details above the transactions now \
+                image: None,
+            },
+            Item {
+                icon: ph::FILE_ARROW_DOWN,
+                title: "More bank statements import cleanly",
+                body: "Statements with lots of account details above the transactions now \
                import without any fixing up.",
-            image: None,
-        },
-    ],
-}];
+                image: None,
+            },
+        ],
+    },
+];
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

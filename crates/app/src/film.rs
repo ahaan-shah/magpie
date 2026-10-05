@@ -968,6 +968,34 @@ fn stills() {
             assert_eq!(name.as_deref(), Some("Groceries"), "typing gro + Enter picks Groceries");
         }
 
+        // Payee suggestions: type, arrow down twice, Enter.
+        ctx.memory_mut(|m| m.request_focus(Id::new("txn-payee")));
+        step(&mut app, Vec::new(), t + 0.02);
+        step(&mut app, vec![Event::Text("a".into())], t + 0.04);
+        let key = |key| Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        };
+        step(&mut app, vec![key(egui::Key::ArrowDown)], t + 0.06);
+        step(&mut app, vec![key(egui::Key::ArrowDown)], t + 0.08);
+        let mut last = None;
+        for _ in 0..20 {
+            t += 1.0 / 60.0;
+            last = Some(step(&mut app, vec![Event::PointerMoved(pos2(1200.0, 780.0))], t).0);
+        }
+        let path = format!("{out}/payee-keys-{}.png", theme.to_lowercase());
+        last.expect("frame").save(&path).expect("save");
+        eprintln!("stills: wrote {path}");
+        step(&mut app, vec![key(egui::Key::Enter)], t + 0.02);
+        step(&mut app, Vec::new(), t + 0.04);
+        let Some(crate::forms::Modal::Txn(f)) = &app.modal else {
+            panic!("Enter on a suggestion keeps the form open")
+        };
+        assert!(f.payee_text().len() > 1, "Enter filled in the suggestion");
+
         // The sidebar's update prompt.
         step(
             &mut app,
@@ -1249,10 +1277,12 @@ fn basic_stills() {
         s.save(img, "whatsnew-card-release");
         s.click(&mut app, "whatsnew:ok");
         s.settle(&mut app, 30);
-        // And moving to another page does too.
+        // Moving to another page leaves it there until it's been read.
         app.whats_new.pending = true;
+        app.go(&ctx, crate::app::Page::Reports);
         app.go(&ctx, crate::app::Page::Settings);
-        assert!(!app.whats_new.pending, "moving to another page puts it away");
+        assert!(app.whats_new.pending, "moving between pages keeps the row");
+        app.whats_new.pending = false;
         // Settings → About, at the bottom of the page.
         for _ in 0..40 {
             s.step(

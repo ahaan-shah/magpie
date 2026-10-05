@@ -102,7 +102,7 @@ What the script does on each platform:
 - **Linux:** installs `magpie` into `~/.local/bin`, and adds a desktop entry and icon so Magpie shows up in your app launcher.
 - **macOS:** installs `Magpie.app` (universal, Apple Silicon + Intel) into `/Applications`.
 
-To pin a version, set `MAGPIE_VERSION=0.2.3`.
+To pin a version, set `MAGPIE_VERSION=0.2.4`.
 
 The app isn't notarized yet. If macOS refuses to open it the first time, right-click the app and choose **Open**, or run `xattr -dr com.apple.quarantine /Applications/Magpie.app`.
 
@@ -114,7 +114,7 @@ In PowerShell:
 irm https://raw.githubusercontent.com/ahaan-shah/magpie/main/install.ps1 | iex
 ```
 
-This installs Magpie just for you (no admin prompt) into `%LOCALAPPDATA%\Programs\Magpie` and adds it to the Start menu. It works on Windows 10 (1809 or newer) and Windows 11, on both x64 and ARM64 PCs. To pin a version, run `$env:MAGPIE_VERSION = "0.2.3"` first.
+This installs Magpie just for you (no admin prompt) into `%LOCALAPPDATA%\Programs\Magpie` and adds it to the Start menu. It works on Windows 10 (1809 or newer) and Windows 11, on both x64 and ARM64 PCs. To pin a version, run `$env:MAGPIE_VERSION = "0.2.4"` first.
 
 You can also download `Magpie-windows-setup.exe` from the [latest release](https://github.com/ahaan-shah/magpie/releases/latest) and run it, or use the portable zip (`Magpie-windows-x64.zip` or `Magpie-windows-arm64.zip`). The installer isn't code-signed yet, so SmartScreen may say "Windows protected your PC". Click **More info**, then **Run anyway**.
 

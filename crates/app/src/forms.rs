@@ -484,6 +484,8 @@ pub struct TxnForm {
     amount: String,
     to_amount: String,
     payee: String,
+    /// The payee suggestion the arrow keys are on.
+    payee_lit: Option<usize>,
     category: Option<RowId>,
     note: String,
     tags: String,
@@ -520,6 +522,7 @@ impl TxnForm {
             amount: String::new(),
             to_amount: String::new(),
             payee: String::new(),
+            payee_lit: None,
             category: None,
             note: String::new(),
             tags: String::new(),
@@ -541,6 +544,12 @@ impl TxnForm {
             f.mode = 0;
         }
         f
+    }
+
+    /// The payee as typed, for the stills.
+    #[cfg(test)]
+    pub fn payee_text(&self) -> &str {
+        &self.payee
     }
 
     /// The chosen category, for the stills.
@@ -727,40 +736,79 @@ impl TxnForm {
                 (false, true, 1) => "Salary, a refund, a gift…",
                 (false, true, _) => "Coffee, rent, groceries…",
             };
-            let r = w::text_field(ui, t, payee_id, &mut self.payee, hint, ui.available_width());
             let payees = app
                 .payees
                 .get(app.store.version(), || analytics::payee_index(&app.store))
                 .clone();
-            let q = self.payee.trim().to_lowercase();
-            if r.has_focus() && !q.is_empty() {
-                let matches: Vec<_> = payees
+            let suggestions = |text: &str| {
+                let q = text.trim().to_lowercase();
+                if q.is_empty() {
+                    return Vec::new();
+                }
+                payees
                     .iter()
                     .filter(|p| p.name.to_lowercase().contains(&q) && p.name.to_lowercase() != q)
                     .take(6)
-                    .collect();
-                if !matches.is_empty() {
-                    egui::Popup::new(payee_id.with("ac"), ctx.clone(), r.rect, ui.layer_id())
-                        .open(true)
-                        .width(r.rect.width())
-                        .frame(w::popup_frame(t))
-                        .show(|ui| {
-                            for p in matches {
-                                let cat = app.store.category_name(p.category).to_string();
-                                let resp = ui.add(
-                                    egui::Button::selectable(false, format!("{}   ·  {cat}", p.name))
-                                        .min_size(vec2(ui.available_width(), 28.0)),
-                                );
-                                if resp.clicked() || resp.is_pointer_button_down_on() {
-                                    self.payee = p.name.clone();
-                                    if self.auto_category && fits(p.category) {
-                                        self.category = p.category;
-                                    }
-                                }
-                            }
-                        });
+                    .collect::<Vec<_>>()
+            };
+            // Arrow keys move through the suggestions and Enter takes one.
+            // They're read before the field so it doesn't move its cursor
+            // or let Enter save the form.
+            let before = suggestions(&self.payee);
+            let mut picked = None;
+            if ui.memory(|m| m.has_focus(payee_id)) && !before.is_empty() {
+                let none = egui::Modifiers::NONE;
+                let (down, up) = ui.input_mut(|i| {
+                    (
+                        i.consume_key(none, egui::Key::ArrowDown),
+                        i.consume_key(none, egui::Key::ArrowUp),
+                    )
+                });
+                let last = before.len() - 1;
+                if down {
+                    self.payee_lit = Some(self.payee_lit.map_or(0, |i| (i + 1).min(last)));
+                }
+                if up {
+                    self.payee_lit = self.payee_lit.and_then(|i| i.checked_sub(1));
+                }
+                if let Some(i) = self.payee_lit
+                    && ui.input_mut(|inp| inp.consume_key(none, egui::Key::Enter))
+                {
+                    picked = before.get(i.min(last)).map(|p| (*p).clone());
                 }
             }
+            let r = w::text_field(ui, t, payee_id, &mut self.payee, hint, ui.available_width());
+            if r.changed() {
+                self.payee_lit = None;
+            }
+            let matches = suggestions(&self.payee);
+            if r.has_focus() && !matches.is_empty() && picked.is_none() {
+                self.payee_lit = self.payee_lit.map(|i| i.min(matches.len() - 1));
+                let lit = self.payee_lit;
+                egui::Popup::new(payee_id.with("ac"), ctx.clone(), r.rect, ui.layer_id())
+                    .open(true)
+                    .width(r.rect.width())
+                    .frame(w::popup_frame(t))
+                    .show(|ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.spacing_mut().item_spacing.y = 2.0;
+                        for (i, p) in matches.iter().enumerate() {
+                            let cat = app.store.category_name(p.category).to_string();
+                            let resp = w::option_lit(ui, false, lit == Some(i), format!("{}   ·  {cat}", p.name));
+                            if resp.clicked() || resp.is_pointer_button_down_on() {
+                                picked = Some((*p).clone());
+                            }
+                        }
+                    });
+            }
+            if let Some(p) = picked {
+                self.payee = p.name.clone();
+                self.payee_lit = None;
+                if self.auto_category && fits(p.category) {
+                    self.category = p.category;
+                }
+            }
+            let q = self.payee.trim().to_lowercase();
             if r.changed()
                 && self.auto_category
                 && let Some(p) = payees.iter().find(|p| p.name.to_lowercase() == q)

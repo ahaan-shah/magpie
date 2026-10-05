@@ -4,6 +4,16 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.4] - 2026-10-05
+
+Two small fixes to the transaction form and What's new.
+
+### Changed
+- Payee suggestions: the arrow keys move through the list as you type, and
+  Enter picks the highlighted one (and its usual category).
+- What's new stays in the sidebar until you open it and close the card;
+  moving between pages no longer puts it away.
+
 ## [0.2.3] - 2026-10-05
 
 A "What's new" card after updates, picking a category by typing, and

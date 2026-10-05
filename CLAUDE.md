@@ -157,8 +157,9 @@ crates/app   (magpie-finance) the eframe app; binary `magpie`
   categories for money in; there's no extra field in the database.
 - **What's new after updates:** after an update, the sidebar's update spot
   shows "What's new" (a gift with an accent dot). It opens a card of the
-  release's points (`whatsnew.rs`); moving to any other page puts the row
-  away for good (`App::go` → `dismiss`), and Settings → About links to the
+  release's points (`whatsnew.rs`); the row stays until the card has been
+  opened and closed (the modal host calls `dismiss`; moving between pages
+  doesn't, by the maintainer's request), and Settings → About links to the
   release page. "Just updated" comes from the updater's restart
   (`MAGPIE_UPDATED_FROM`) or the saved `seen_version` being older; with
   neither, an onboarded workspace (an update from ≤ 0.2.2) sees the current
@@ -240,9 +241,9 @@ from the README until they're actually published. The PKGBUILD and cask in
 
 ## Where things stand
 
-- **Released:** up to v0.2.3 (What's new after updates, category
-  type-ahead, statement import that finds the transaction block first,
-  always opening on Home). v0.2.2 brought paybacks; v0.2.1 brought Basic mode, the
+- **Released:** up to v0.2.4 (payee suggestions with arrow keys; What's
+  new stays until read). v0.2.3 brought What's new, category type-ahead,
+  cleaner statement import and opening on Home; v0.2.2 brought paybacks; v0.2.1 brought Basic mode, the
   Magpie themes and database migration v2 for account card looks. v0.2.0 was the first release with
   Windows (0.1.5 was folded into 0.1.6). The repo was private until 0.1.6, then made public.
 - **Windows:** Inno Setup installer (`packaging/windows/magpie.iss`,
