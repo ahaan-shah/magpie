@@ -1240,6 +1240,15 @@ fn basic_stills() {
         s.click(&mut app, "whatsnew:ok");
         s.settle(&mut app, 30);
         assert!(!app.whats_new.pending, "Got it puts the row away");
+        // The notes this version actually ships.
+        app.whats_new.notes = vec![&crate::whatsnew::RELEASES[0]];
+        app.whats_new.pending = true;
+        s.settle(&mut app, 40);
+        s.click(&mut app, "whatsnew:row");
+        let img = s.settle(&mut app, 60);
+        s.save(img, "whatsnew-card-release");
+        s.click(&mut app, "whatsnew:ok");
+        s.settle(&mut app, 30);
         // And moving to another page does too.
         app.whats_new.pending = true;
         app.go(&ctx, crate::app::Page::Settings);

@@ -4,7 +4,10 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.3] - 2026-10-05
+
+A "What's new" card after updates, picking a category by typing, and
+bank statements with long headers that import cleanly.
 
 ### Added
 - What's new: after Magpie updates, a "What's new" button sits where the

@@ -240,14 +240,9 @@ from the README until they're actually published. The PKGBUILD and cask in
 
 ## Where things stand
 
-- **On `main`, not yet released (next: 0.2.3):** What's new after updates,
-  category type-ahead (`forms::category_picker`, built on `w::dropdown_ex`),
-  statement import that finds the transaction block first (date + amount
-  rows, label row above), always opening on Home, and the first-month KPI
-  labels fix.
-  Its 0.2.3 notes in `whatsnew::RELEASES` currently list only that; add
-  each new 0.2.3 feature as a point there (and in CHANGELOG → Unreleased).
-- **Released:** up to v0.2.2 (paybacks). v0.2.1 brought Basic mode, the
+- **Released:** up to v0.2.3 (What's new after updates, category
+  type-ahead, statement import that finds the transaction block first,
+  always opening on Home). v0.2.2 brought paybacks; v0.2.1 brought Basic mode, the
   Magpie themes and database migration v2 for account card looks. v0.2.0 was the first release with
   Windows (0.1.5 was folded into 0.1.6). The repo was private until 0.1.6, then made public.
 - **Windows:** Inno Setup installer (`packaging/windows/magpie.iss`,

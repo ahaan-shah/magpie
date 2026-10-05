@@ -6,7 +6,7 @@
 # SHA256SUMS, and installs Magpie for the current user (no admin prompt).
 #
 # Environment:
-#   MAGPIE_VERSION   install a specific version (e.g. 0.2.2) instead of the latest
+#   MAGPIE_VERSION   install a specific version (e.g. 0.2.3) instead of the latest
 #   MAGPIE_BASE_URL  download from a mirror instead of GitHub releases
 #
 # Everything runs inside a script block so nothing leaks into your session,

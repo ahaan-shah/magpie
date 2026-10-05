@@ -1,5 +1,5 @@
 ; Magpie installer (Inno Setup 6.3+). Built by scripts/package-windows.ps1:
-;   iscc /DVersion=0.2.2 /DSrcX64=...\magpie.exe /DSrcArm64=...\magpie.exe magpie.iss
+;   iscc /DVersion=0.2.3 /DSrcX64=...\magpie.exe /DSrcArm64=...\magpie.exe magpie.iss
 ;
 ; One installer for x64 and ARM64 PCs: it installs the native build for the
 ; machine. Installs per user by default (no admin prompt) into
