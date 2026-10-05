@@ -13,8 +13,8 @@
 <meta property="og:image" content="https://ahaan-shah.github.io/magpie/media/dashboard-light.webp">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preload" href="fonts/Figtree-Regular.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="fonts/InterDisplay-SemiBold.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="fonts/Parisienne-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/Fraunces-Medium.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/Fraunces-MediumItalic.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -33,10 +33,13 @@
 
 <section class="hero">
   <img class="hero-icon" src="icon.svg" alt="" width="128" height="128">
-  <h1>A <em class="calm">calm</em> way to manage your money</h1>
+  <h1>A <em>calm</em> way to manage your money</h1>
+  <p class="lede">Magpie is a fast, beautiful personal finance app that lives on your computer.
+    Budgets, accounts, bills and goals, with no account and no cloud.</p>
   <div class="cta">
     <a class="btn primary" href="#install">Install Magpie</a>
   </div>
+  <p class="platforms">Free and open source · Linux, macOS and Windows</p>
   <figure class="shot hero-shot reveal">
     <picture>
       <source srcset="media/dashboard-dark.webp" media="(prefers-color-scheme: dark)">
@@ -73,14 +76,18 @@
         <img src="media/goals-light.webp" alt="Goals" width="1880" height="1240" loading="lazy">
       </div>
       <p class="caption" aria-live="polite"></p>
-      <p class="aside">Sixteen themes and nine fonts, so it looks the way you like.</p>
     </div>
   </div>
 </section>
 
 <section id="install" class="install">
   <h2 class="reveal">Install in one line</h2>
+  <p class="sub reveal">Paste this into a terminal. It downloads the latest release, checks it, and puts Magpie in your apps.</p>
   <div class="installer reveal">
+    <div class="seg" role="tablist" aria-label="Platform">
+      <button role="tab" data-os="unix" aria-selected="true">Linux &amp; macOS</button>
+      <button role="tab" data-os="win" aria-selected="false">Windows</button>
+    </div>
     <div class="cmd" data-os="unix">
       <span class="prompt">$</span>
       <code>curl -fsSL https://raw.githubusercontent.com/ahaan-shah/magpie/main/install.sh | sh</code>
@@ -91,12 +98,29 @@
       <code>irm https://raw.githubusercontent.com/ahaan-shah/magpie/main/install.ps1 | iex</code>
       <button class="copy" type="button">Copy</button>
     </div>
-    <p class="note">
-      <span data-os="unix">Paste this in your terminal</span><span data-os="win" hidden>Paste this in PowerShell</span>
-      <span class="dot">·</span>
-      <button class="switch" type="button" data-os="unix">On Windows?</button><button class="switch" type="button" data-os="win" hidden>On macOS or Linux?</button>
-    </p>
+    <p class="note" data-os="unix">Paste this in your terminal</p>
+    <p class="note" data-os="win" hidden>Paste this in PowerShell</p>
   </div>
+</section>
+
+<section id="themes" class="themes">
+  <h2 class="reveal">Make it yours</h2>
+  <p class="sub reveal">Sixteen themes and nine fonts, so it looks the way you like.</p>
+  <div class="deck theme-deck reveal" aria-roledescription="carousel" aria-label="Themes">
+    <div class="cards">
+      <figure class="card shot" data-name="Magpie Light" style="--bg:#F7F2EA;--ac:#D7743F"><img src="media/themes/magpie-light.webp" alt="Magpie in the Magpie Light theme" width="1880" height="1240" loading="lazy"></figure>
+      <figure class="card shot" data-name="Magpie Dark" style="--bg:#161B22;--ac:#E4814F"><img src="media/themes/magpie-dark.webp" alt="Magpie in the Magpie Dark theme" width="1880" height="1240" loading="lazy"></figure>
+      <figure class="card shot" data-name="Rosé Pine Dawn" style="--bg:#FAF4ED;--ac:#907AA9"><img src="media/themes/rose-pine-dawn.webp" alt="Magpie in the Rosé Pine Dawn theme" width="1880" height="1240" loading="lazy"></figure>
+      <figure class="card shot" data-name="Tokyo Night" style="--bg:#1A1B26;--ac:#7AA2F7"><img src="media/themes/tokyo-night.webp" alt="Magpie in the Tokyo Night theme" width="1880" height="1240" loading="lazy"></figure>
+      <figure class="card shot" data-name="Latte" style="--bg:#EFF1F5;--ac:#8839EF"><img src="media/themes/latte.webp" alt="Magpie in the Latte theme" width="1880" height="1240" loading="lazy"></figure>
+      <figure class="card shot" data-name="Nord" style="--bg:#2E3440;--ac:#88C0D0"><img src="media/themes/nord.webp" alt="Magpie in the Nord theme" width="1880" height="1240" loading="lazy"></figure>
+      <figure class="card shot" data-name="Flexoki" style="--bg:#F2F0E5;--ac:#24837B"><img src="media/themes/flexoki.webp" alt="Magpie in the Flexoki theme" width="1880" height="1240" loading="lazy"></figure>
+      <figure class="card shot" data-name="Everforest" style="--bg:#2D353B;--ac:#A7C080"><img src="media/themes/everforest.webp" alt="Magpie in the Everforest theme" width="1880" height="1240" loading="lazy"></figure>
+    </div>
+    <button class="nav prev" type="button" aria-label="Previous theme"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button class="nav next" type="button" aria-label="Next theme"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M7.5 4.5 13 10l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </div>
+  <p class="deck-label reveal" aria-live="polite"><i></i><span></span></p>
 </section>
 
 <section id="film" class="film">
@@ -110,15 +134,16 @@
 
 <section class="quotes">
   <h2 class="reveal">What people are definitely saying</h2>
-  <div class="carousel reveal" aria-roledescription="carousel" aria-label="Made-up testimonials">
-    <div class="track" title="Next">
-      <figure class="slide"><blockquote>“I opened it and it was already open. I’ve never felt so seen.”</blockquote><figcaption><b>Gerald P.</b> · Closes laptops with authority</figcaption></figure>
-      <figure class="slide"><blockquote>“0% CPU when idle. Finally, software that relates to me.”</blockquote><figcaption><b>Dev, Senior Engineer</b> · On paid leave since 2024</figcaption></figure>
-      <figure class="slide"><blockquote>“It says I spent $412 on coffee this month. I have decided the app is wrong.”</blockquote><figcaption><b>Doug R.</b> · Vice President of Denial</figcaption></figure>
-      <figure class="slide"><blockquote>“Blazingly fast. I watched my savings disappear at 144 frames per second.”</blockquote><figcaption><b>Priya S.</b> · Budget enthusiast, budget ignorer</figcaption></figure>
-      <figure class="slide"><blockquote>“Five stars. I checked with my accountant, who is also me.”</blockquote><figcaption><b>Sole Proprietor</b> · Of mostly vibes</figcaption></figure>
+  <div class="deck quote-deck reveal" data-auto="6000" aria-roledescription="carousel" aria-label="Made-up testimonials">
+    <div class="cards">
+      <figure class="card quote"><blockquote>“I opened it and it was already open. Honestly the most punctual thing in my life.”</blockquote><figcaption><b>Gerald P.</b>Now early to everything</figcaption></figure>
+      <figure class="card quote"><blockquote>“0% CPU when idle. My laptop fan and I finally get some peace and quiet.”</blockquote><figcaption><b>Dev, Senior Engineer</b>Can hear the birds again</figcaption></figure>
+      <figure class="card quote"><blockquote>“Turns out I can afford the coffee. Magpie checked. I’m having two.”</blockquote><figcaption><b>Doug R.</b>Vice President of Caffeine</figcaption></figure>
+      <figure class="card quote"><blockquote>“So fast I set up a whole year of budgets before the kettle boiled.”</blockquote><figcaption><b>Priya S.</b>Kettle enthusiast</figcaption></figure>
+      <figure class="card quote"><blockquote>“My accountant gives it five stars. My accountant is me, and we’ve never agreed on anything before.”</blockquote><figcaption><b>Sam L.</b>Self-employed, self-approved</figcaption></figure>
     </div>
-    <div class="dots"><button type="button" aria-label="Testimonial 1"></button><button type="button" aria-label="Testimonial 2"></button><button type="button" aria-label="Testimonial 3"></button><button type="button" aria-label="Testimonial 4"></button><button type="button" aria-label="Testimonial 5"></button></div>
+    <button class="nav prev" type="button" aria-label="Previous"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button class="nav next" type="button" aria-label="Next"><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M7.5 4.5 13 10l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
   </div>
   <p class="fine reveal">Testimonials are made up. The app is real.</p>
 </section>
