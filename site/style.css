@@ -185,7 +185,12 @@ h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.08; }
 /* Tour: the tabs sit just left of the screenshot, which takes the rest of the
    row, so its right margin matches the tabs' left one. The heading centres on
    the screenshot rather than the page. */
-.tour { --tabs: 170px; --tabs-gap: 20px; }
+/* Wider side margins than other sections, growing with the window, so the
+   tabs and screenshot don't run to the edges. */
+.tour {
+  --tabs: 170px; --tabs-gap: 20px; --side: clamp(32px, 7vw, 100px);
+  max-width: calc(1080px + 2 * var(--side)); padding-inline: var(--side);
+}
 .tour h2 { padding-left: calc(var(--tabs) + var(--tabs-gap)); }
 .tour-body { display: grid; grid-template-columns: var(--tabs) 1fr; gap: var(--tabs-gap); align-items: start; }
 .tabs { display: flex; flex-direction: column; gap: 2px; }
@@ -322,6 +327,7 @@ footer a { color: var(--text2); }
 @media (max-width: 860px) {
   section { padding: 56px 16px; }
   .facts { grid-template-columns: 1fr 1fr; }
+  .tour { --side: 16px; }
   .tour h2 { padding-left: 0; }
   .tour-body { grid-template-columns: 1fr; gap: 16px; }
   .tabs {
