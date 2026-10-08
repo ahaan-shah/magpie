@@ -33,6 +33,25 @@ pub struct Notes {
 /// and why it helps, not how it works.
 pub const RELEASES: &[Notes] = &[
     Notes {
+        version: "0.2.5",
+        items: &[
+            Item {
+                icon: ph::TAG,
+                title: "A usual category for each payee",
+                body: "Change a transaction's category and Magpie offers to use it for everything \
+                       from that payee, including new ones and imports.",
+                image: None,
+            },
+            Item {
+                icon: ph::GIFT,
+                title: "One-offs stay one-offs",
+                body: "Bought a gift at your usual grocer? Pick \"Just this one\" and only that \
+                       transaction changes.",
+                image: None,
+            },
+        ],
+    },
+    Notes {
         version: "0.2.4",
         items: &[
             Item {

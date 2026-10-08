@@ -116,6 +116,14 @@ pub(crate) const MIGRATIONS: &[&str] = &[
     ALTER TABLE accounts ADD COLUMN icon TEXT NOT NULL DEFAULT '';
     ALTER TABLE accounts ADD COLUMN style INTEGER NOT NULL DEFAULT 0;
     "#,
+    // v3: a default category per payee (keyed by the trimmed, lowercased
+    // name). Older versions ignore the table.
+    r#"
+    CREATE TABLE payee_categories (
+        payee        TEXT PRIMARY KEY,
+        category_id  INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE
+    );
+    "#,
 ];
 
 pub struct Db {
@@ -336,6 +344,28 @@ impl Db {
 
     pub fn delete_category(&self, id: Id) -> Result<()> {
         self.conn.execute("DELETE FROM categories WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    // ---------- payee categories ----------
+
+    pub fn payee_categories(&self) -> Result<Vec<(String, Id)>> {
+        let mut st = self.conn.prepare("SELECT payee, category_id FROM payee_categories")?;
+        let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    pub fn set_payee_category(&self, payee: &str, category: Option<Id>) -> Result<()> {
+        match category {
+            Some(c) => self.conn.execute(
+                "INSERT INTO payee_categories(payee, category_id) VALUES (?1, ?2)
+                 ON CONFLICT(payee) DO UPDATE SET category_id = excluded.category_id",
+                params![payee, c],
+            )?,
+            None => self
+                .conn
+                .execute("DELETE FROM payee_categories WHERE payee = ?1", [payee])?,
+        };
         Ok(())
     }
 

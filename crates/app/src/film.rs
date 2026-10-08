@@ -1148,6 +1148,90 @@ impl Shots {
     }
 }
 
+/// `MAGPIE_STILL_DIR=<dir> cargo test -p magpie-finance --profile fast payee_stills -- --ignored`
+/// changes a transaction's category, files the whole payee there, then
+/// overrides a single one, checking the store at each step.
+#[test]
+#[ignore = "renders PNGs for visual review; run explicitly"]
+fn payee_stills() {
+    // SAFETY: single-threaded test setup before the app reads these.
+    unsafe {
+        std::env::set_var("MAGPIE_HEADLESS", "1");
+        std::env::set_var("MAGPIE_TODAY", "2026-09-29");
+    }
+    crate::marks::enable();
+    let out = std::env::var("MAGPIE_STILL_DIR")
+        .unwrap_or_else(|_| std::env::temp_dir().join("magpie-stills").display().to_string());
+    std::fs::create_dir_all(&out).expect("out dir");
+    for theme in ["Magpie Light", "Magpie Dark"] {
+        let dir = std::env::temp_dir().join(format!("magpie-stills-payee-{theme}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut store = magpie_core::Store::open(&dir).expect("store");
+        magpie_core::demo::generate(&mut store, magpie_core::Cur::USD, 3, 0).expect("demo");
+        store.update_settings(|s| s.theme = theme.into()).expect("theme");
+        let ctx = Context::default();
+        let mut app = App::with_context(&ctx, None, store);
+        let mut shots = Shots {
+            ctx: ctx.clone(),
+            size: vec2(1280.0, 800.0),
+            renderer: WgpuTestRenderer::new(),
+            t: 0.0,
+            out: out.clone(),
+            suffix: theme.to_lowercase().replace(' ', "-"),
+        };
+        shots.settle(&mut app, 10);
+        let cat = |app: &App, name: &str| app.store.find_category(name).expect(name).id;
+        let (groceries, dining, gifts) = (cat(&app, "Groceries"), cat(&app, "Dining"), cat(&app, "Gifts"));
+        let from = |app: &App, payee: &str| -> Vec<magpie_core::Txn> {
+            app.store.txns().iter().filter(|x| x.payee == payee).cloned().collect()
+        };
+        let enter = || Event::Key {
+            key: egui::Key::Enter,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        };
+        let edit = |app: &mut App, shots: &mut Shots, id, c| {
+            let tx = app.store.txn(id).expect("txn").clone();
+            let mut f = crate::forms::TxnForm::edit(&app.store, &tx);
+            f.set_category(c);
+            app.open_modal(&shots.ctx.clone(), crate::forms::Modal::Txn(f));
+            shots.settle(app, 30);
+            shots.step(app, vec![enter()]);
+            shots.settle(app, 40)
+        };
+
+        // Safeway is groceries in the demo; move one to Dining.
+        let safeway = from(&app, "Safeway");
+        assert!(safeway.len() > 2 && safeway.iter().all(|x| x.category == Some(groceries)));
+        let img = edit(&mut app, &mut shots, safeway[0].id, dining);
+        assert!(matches!(app.modal, Some(crate::forms::Modal::Payee(_))), "saving asks");
+        shots.save(img, "payee-ask");
+        shots.click(&mut app, "payee:all");
+        let img = shots.settle(&mut app, 40);
+        shots.save(img, "payee-all");
+        assert!(from(&app, "Safeway").iter().all(|x| x.category == Some(dining)));
+        assert_eq!(app.store.payee_category("safeway"), Some(dining));
+
+        // One of them was a gift: just that one.
+        let img = edit(&mut app, &mut shots, safeway[1].id, gifts);
+        shots.save(img, "payee-ask-again");
+        shots.click(&mut app, "payee:one");
+        shots.settle(&mut app, 30);
+        let now = from(&app, "Safeway");
+        assert_eq!(now.iter().filter(|x| x.category == Some(gifts)).count(), 1);
+        assert_eq!(now.iter().filter(|x| x.category == Some(dining)).count(), now.len() - 1);
+        assert_eq!(app.store.payee_category("Safeway"), Some(dining));
+        assert!(app.modal.is_none() || app.modal_closing.is_some());
+
+        // Editing it again without changing the category asks nothing.
+        let img = edit(&mut app, &mut shots, safeway[1].id, gifts);
+        assert!(!matches!(app.modal, Some(crate::forms::Modal::Payee(_))));
+        drop(img);
+    }
+}
+
 /// `MAGPIE_STILL_DIR=<dir> cargo test -p magpie-finance --profile fast basic_stills -- --ignored`
 /// renders Basic mode's pages, forms, the switch to Advanced, and the
 /// onboarding mode step.

@@ -168,6 +168,16 @@ crates/app   (magpie-finance) the eframe app; binary `magpie`
   "Where it went" and totals all net it, and it never counts as income. The
   transaction form's "Someone's paying me back" toggle just offers expense
   categories for money in; there's no extra field in the database.
+- **Payee default categories** (migration v3, `payee_categories`, keyed by
+  `store::payee_key`: trimmed, lowercased). Before 0.2.5, suggestions and
+  imports used the payee's *last* category, so one gift from the grocer
+  turned every later import into Gifts. Now `payee_index` prefers the set
+  default. Changing a transaction's category in the form asks (`PayeeAsk`)
+  "Just this one" / "All of them"; it doesn't ask for new transactions, for
+  a payee seen only once, or when the category already is the default.
+  Setting a default moves every transaction from that payee the first time,
+  but on later changes only those on the old default or uncategorized, so
+  hand-picked one-offs stay. One undo step (`Op::Payee`).
 - **What's new after updates:** after an update, the sidebar's update spot
   shows "What's new" (a gift with an accent dot). It opens a card of the
   release's points (`whatsnew.rs`); the row stays until the card has been

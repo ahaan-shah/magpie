@@ -1,6 +1,6 @@
 # Maintainer: Ahaan Shah <dhanvaan@yahoo.com>
 pkgname=magpie-finance
-pkgver=0.2.4
+pkgver=0.2.5
 pkgrel=1
 pkgdesc="Fast, beautiful, local-first personal finance tracker"
 arch=('x86_64' 'aarch64')

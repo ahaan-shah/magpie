@@ -4,6 +4,22 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.5] - 2026-10-09
+
+A default category for each payee, with room for one-offs.
+
+### Added
+- Payee categories: change a transaction's category and Magpie asks whether
+  to use it for every transaction from that payee. "All of them" moves the
+  existing ones and files new ones there (imports, quick add and the form
+  all follow it); "Just this one" leaves the rest alone. Changing the default
+  later keeps any you set by hand, like a gift from your usual grocer. One
+  undo puts everything back.
+
+### Changed
+- Home's "Where it went" names a seventh category instead of calling it
+  "Other" when it's the only one left over.
+
 ## [0.2.4] - 2026-10-05
 
 Two small fixes to the transaction form and What's new.

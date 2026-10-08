@@ -290,8 +290,9 @@ pub fn category_trend_spans(store: &Store, spans: &[(Date, Date)], k: usize) -> 
     series
 }
 
-/// What the user usually does with a payee: last category and account, and
-/// how often it's been used. Drives autocomplete and category suggestions.
+/// What the user usually does with a payee: its default category (else the
+/// last one used), last account, and how often it's been used. Drives
+/// autocomplete, category suggestions and imports.
 #[derive(Clone, Debug)]
 pub struct PayeeInfo {
     pub name: String,
@@ -322,6 +323,12 @@ pub fn payee_index(store: &Store) -> Vec<PayeeInfo> {
         e.count += 1;
     }
     let mut v: Vec<_> = map.into_values().collect();
+    // A default the user set beats whatever the last transaction used.
+    for p in &mut v {
+        if let Some(c) = store.payee_category(&p.name) {
+            p.category = Some(c);
+        }
+    }
     v.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.name.cmp(&b.name)));
     v
 }

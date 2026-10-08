@@ -62,6 +62,9 @@ enum Op {
     Update(Vec<(Txn, Txn)>),
     /// Snapshots of budget categories (plan + overrides) to restore.
     Budget(Vec<BudgetSnapshot>),
+    /// A payee's default category to restore, plus the transactions that
+    /// were moved along with it.
+    Payee(String, Option<Id>, Vec<(Txn, Txn)>),
 }
 
 type BudgetSnapshot = (Id, Option<BudgetPlan>, Vec<(Month, i64)>);
@@ -85,6 +88,8 @@ pub struct Store {
     goals: Vec<Goal>,
     contributions: Vec<Contribution>,
     receipts: Vec<Receipt>,
+    /// Default category per payee, keyed by [`payee_key`].
+    payees: HashMap<String, Id>,
     pub rates: Rates,
     settings: Settings,
     version: u64,
@@ -94,6 +99,11 @@ pub struct Store {
 
 fn sort_key(t: &Txn) -> (jiff::civil::Date, Id) {
     (t.date, t.id)
+}
+
+/// How payees are matched: "Gravity Stores " and "gravity stores" are one.
+pub fn payee_key(payee: &str) -> String {
+    payee.trim().to_lowercase()
 }
 
 impl Store {
@@ -162,6 +172,7 @@ impl Store {
             goals: db.goals()?,
             contributions: db.contributions()?,
             receipts: db.receipts()?,
+            payees: db.payee_categories()?.into_iter().collect(),
             rates,
             settings,
             version: 1,
@@ -515,6 +526,7 @@ impl Store {
         }
         self.plans.retain(|p| p.category != id);
         self.overrides.retain(|(c, _), _| *c != id);
+        self.payees.retain(|_, c| *c != id);
         self.undo.clear();
         self.redo.clear();
         self.touch();
@@ -782,6 +794,18 @@ impl Store {
                 }
                 Op::Update(pairs.iter().map(|(b, a)| (a.clone(), b.clone())).collect())
             }
+            Op::Payee(payee, category, pairs) => {
+                let now = self.payees.get(payee).copied();
+                self.raw_set_payee(payee, *category)?;
+                for (before, _) in pairs {
+                    self.raw_update(before.clone())?;
+                }
+                Op::Payee(
+                    payee.clone(),
+                    now,
+                    pairs.iter().map(|(b, a)| (a.clone(), b.clone())).collect(),
+                )
+            }
             Op::Budget(before) => {
                 let now = before.iter().map(|(c, _, _)| self.budget_snapshot(*c)).collect();
                 for snap in before {
@@ -860,6 +884,75 @@ impl Store {
         });
         self.touch();
         Ok(Some(e.label))
+    }
+
+    // ---------- payee categories ----------
+
+    /// The category a payee is filed under by default, if one was set.
+    pub fn payee_category(&self, payee: &str) -> Option<Id> {
+        self.payees.get(&payee_key(payee)).copied()
+    }
+
+    /// The transactions that [`Store::set_payee_category`] would move to
+    /// `category`. With no default yet that's every one from the payee;
+    /// otherwise only those still on the old default (or uncategorized), so
+    /// one-off choices like a gift stay put.
+    pub fn payee_txns_to_move(&self, payee: &str, category: Id) -> Vec<Id> {
+        let key = payee_key(payee);
+        if key.is_empty() {
+            return Vec::new();
+        }
+        let old = self.payees.get(&key).copied();
+        self.txns
+            .iter()
+            .filter(|t| !t.is_transfer() && t.category != Some(category) && payee_key(&t.payee) == key)
+            .filter(|t| old.is_none() || t.category.is_none() || t.category == old)
+            .map(|t| t.id)
+            .collect()
+    }
+
+    /// Files `payee` under `category` from now on and moves its existing
+    /// transactions there (see [`Store::payee_txns_to_move`]), as one
+    /// undoable step. Returns how many transactions moved.
+    pub fn set_payee_category(&mut self, payee: &str, category: Id) -> Result<usize> {
+        let key = payee_key(payee);
+        if key.is_empty() || self.category(category).is_none() {
+            return Ok(0);
+        }
+        let ids = self.payee_txns_to_move(payee, category);
+        let before = self.payees.get(&key).copied();
+        let mut pairs = Vec::with_capacity(ids.len());
+        self.db.batch(|db| {
+            db.set_payee_category(&key, Some(category))?;
+            for id in &ids {
+                if let Some(b) = self.txns.iter().find(|t| t.id == *id) {
+                    let mut a = b.clone();
+                    a.category = Some(category);
+                    db.update_txn(&a)?;
+                    pairs.push((b.clone(), a));
+                }
+            }
+            Ok(())
+        })?;
+        self.payees.insert(key.clone(), category);
+        for (_, a) in &pairs {
+            self.remove(a.id);
+            self.place(a.clone());
+        }
+        let n = pairs.len();
+        let label = format!("File {} under {}", payee.trim(), self.category_name(Some(category)));
+        self.record(label, Op::Payee(key, before, pairs));
+        self.touch();
+        Ok(n)
+    }
+
+    fn raw_set_payee(&mut self, key: &str, category: Option<Id>) -> Result<()> {
+        self.db.set_payee_category(key, category)?;
+        match category {
+            Some(c) => self.payees.insert(key.to_string(), c),
+            None => self.payees.remove(key),
+        };
+        Ok(())
     }
 
     // ---------- budgets ----------
@@ -1099,6 +1192,86 @@ pub(crate) mod tests {
         assert_eq!(s.txn(a).unwrap().date, date(2026, 3, 5));
         s.redo().unwrap();
         assert_eq!(s.txn(a).unwrap().date, date(2026, 3, 20));
+    }
+
+    #[test]
+    fn payee_default_moves_existing_and_keeps_one_offs() {
+        let mut s = fixture();
+        let gifts = s
+            .save_category(Category {
+                id: 0,
+                name: "Gifts".into(),
+                kind: CategoryKind::Expense,
+                color: 0xcc66aa,
+                icon: "gift".into(),
+                archived: false,
+            })
+            .unwrap();
+        let food = s.find_category("Food").unwrap().id;
+        let gravity = |s: &Store, day, cat: Option<Id>| {
+            let mut t = Txn::blank(s.accounts()[0].id, date(2026, 3, day));
+            t.amount = -1_000;
+            t.payee = if day % 2 == 0 {
+                "Gravity Stores".into()
+            } else {
+                "gravity stores ".into()
+            };
+            t.category = cat;
+            t
+        };
+        let a = s.add_txn(gravity(&s, 1, None)).unwrap();
+        let b = s.add_txn(gravity(&s, 2, Some(gifts))).unwrap();
+        let other = s.add_txn(txn(&s, date(2026, 3, 3), -200, "Food")).unwrap();
+
+        // No default yet: every Gravity Stores transaction moves.
+        assert_eq!(s.payee_txns_to_move("Gravity Stores", food).len(), 2);
+        assert_eq!(s.set_payee_category("Gravity Stores", food).unwrap(), 2);
+        assert_eq!(s.txn(a).unwrap().category, Some(food));
+        assert_eq!(s.txn(b).unwrap().category, Some(food));
+        assert_eq!(s.payee_category("GRAVITY STORES"), Some(food));
+        assert_eq!(s.txn(other).unwrap().payee, "Food");
+
+        // A one-off gift, then a new default: the gift stays a gift.
+        let mut t = s.txn(b).unwrap().clone();
+        t.category = Some(gifts);
+        s.update_txn(t).unwrap();
+        let salary = s.find_category("Salary").unwrap().id;
+        assert_eq!(s.set_payee_category("Gravity Stores", salary).unwrap(), 1);
+        assert_eq!(s.txn(a).unwrap().category, Some(salary));
+        assert_eq!(s.txn(b).unwrap().category, Some(gifts));
+
+        // Undo puts back both the old default and the old categories.
+        s.undo().unwrap();
+        assert_eq!(s.payee_category("Gravity Stores"), Some(food));
+        assert_eq!(s.txn(a).unwrap().category, Some(food));
+        s.redo().unwrap();
+        assert_eq!(s.payee_category("Gravity Stores"), Some(salary));
+
+        // The default is what autocomplete and imports suggest, not the gift.
+        let idx = crate::analytics::payee_index(&s);
+        let p = idx
+            .iter()
+            .find(|p| p.name.to_lowercase().trim() == "gravity stores")
+            .unwrap();
+        assert_eq!(p.category, Some(salary));
+
+        // It survives a reload and goes with its category.
+        let dir = std::env::temp_dir().join(format!("magpie-payee-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        {
+            let mut d = Store::open(&dir).unwrap();
+            let mut cat = s.category(food).unwrap().clone();
+            cat.id = 0;
+            let c = d.save_category(cat).unwrap();
+            d.set_payee_category("Gravity Stores", c).unwrap();
+        }
+        let mut d = Store::open(&dir).unwrap();
+        let c = d.payee_category("gravity stores").unwrap();
+        d.delete_category(c).unwrap();
+        assert_eq!(d.payee_category("gravity stores"), None);
+        drop(d);
+        assert_eq!(Store::open(&dir).unwrap().payee_category("gravity stores"), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

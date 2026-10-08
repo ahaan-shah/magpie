@@ -25,6 +25,7 @@ pub enum Modal {
     Category(CategoryForm),
     Import(Box<ImportForm>),
     Confirm(Confirm),
+    Payee(PayeeAsk),
     Help,
     Currency(CurrencyForm),
     WhatsNew,
@@ -41,6 +42,7 @@ impl Modal {
             Modal::Category(_) => "category",
             Modal::Import(_) => "import",
             Modal::Confirm(_) => "confirm",
+            Modal::Payee(_) => "payee",
             Modal::Help => "help",
             Modal::Currency(_) => "currency",
             Modal::WhatsNew => "whats-new",
@@ -73,6 +75,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     let width = match &modal {
         Modal::Import(_) => 720.0,
         Modal::Confirm(_) => 400.0,
+        Modal::Payee(_) => 440.0,
         Modal::Help => 760.0,
         Modal::Goal(_) | Modal::Rule(_) | Modal::Txn(_) => 520.0,
         Modal::Account(_) => 720.0,
@@ -112,6 +115,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 Modal::Category(f) => f.ui(app, ui, &t),
                 Modal::Import(f) => f.ui(app, ui, &t),
                 Modal::Confirm(f) => f.ui(app, ui, &t),
+                Modal::Payee(f) => f.ui(app, ui, &t),
                 Modal::Help => help_ui(ui, &t),
                 Modal::Currency(f) => f.ui(app, ui, &t),
                 Modal::WhatsNew => {
@@ -497,6 +501,9 @@ pub struct TxnForm {
     /// tickets): it's filed under the spending category, so it comes off
     /// that budget instead of counting as income.
     payback: bool,
+    /// Set by `save` when a changed category could become the payee's
+    /// default; the form then asks.
+    ask: Option<PayeeAsk>,
 }
 
 impl TxnForm {
@@ -531,6 +538,7 @@ impl TxnForm {
             first_frame: true,
             auto_category: true,
             payback: false,
+            ask: None,
         }
     }
 
@@ -556,6 +564,11 @@ impl TxnForm {
     #[cfg(test)]
     pub fn category_id(&self) -> Option<RowId> {
         self.category
+    }
+
+    #[cfg(test)]
+    pub fn set_category(&mut self, c: RowId) {
+        self.category = Some(c);
     }
 
     /// A payback filled in, for the stills.
@@ -931,6 +944,11 @@ impl TxnForm {
             Ok(msg) => {
                 if duplicate {
                     app.toasts.success("Duplicated");
+                } else if let Some(ask) = self.ask.take() {
+                    // The question stands in for the "updated" toast.
+                    let ctx = ui.ctx().clone();
+                    app.open_modal(&ctx, Modal::Payee(ask));
+                    return Outcome::Keep;
                 } else {
                     app.toasts.undoable(msg);
                 }
@@ -1040,8 +1058,15 @@ impl TxnForm {
         txn.note = self.note.trim().to_string();
         txn.tags = tags;
         txn.cleared = self.cleared;
-        if self.editing.is_some() {
+        if let Some(id) = self.editing {
+            let was = store.txn(id).map(|x| x.category);
+            let (payee, category) = (txn.payee.clone(), txn.category);
             store.update_txn(txn).map_err(|e| e.to_string())?;
+            if let Some(c) = category
+                && was != Some(category)
+            {
+                self.ask = PayeeAsk::new(store, &payee, c);
+            }
             Ok("Transaction updated")
         } else {
             store.add_txn(txn).map_err(|e| e.to_string())?;
@@ -2293,6 +2318,108 @@ pub enum ConfirmAction {
     DeleteGoal(RowId),
     DeleteCategory(RowId),
     LoadDemo,
+}
+
+// ============================================================ Payee
+
+/// After a transaction's category changes: file every transaction from that
+/// payee there (and new ones), or just this one?
+pub struct PayeeAsk {
+    payee: String,
+    category: RowId,
+    /// How many others would move.
+    others: usize,
+    /// The payee's current default, if it has one.
+    old: Option<RowId>,
+}
+
+impl PayeeAsk {
+    /// `None` when there's nothing to ask: the category already is the
+    /// payee's default, or it's a payee seen only this once.
+    fn new(store: &Store, payee: &str, category: RowId) -> Option<PayeeAsk> {
+        let old = store.payee_category(payee);
+        if payee.trim().is_empty() || old == Some(category) {
+            return None;
+        }
+        let others = store.payee_txns_to_move(payee, category).len();
+        (others > 0 || old.is_some()).then(|| PayeeAsk {
+            payee: payee.trim().to_string(),
+            category,
+            others,
+            old,
+        })
+    }
+
+    fn ui(&mut self, app: &mut App, ui: &mut Ui, t: &Theme) -> Outcome {
+        let store = &app.store;
+        let cat = store.category_name(Some(self.category)).to_string();
+        let (payee, n) = (&self.payee, self.others);
+        let them = if n == 1 {
+            "the other one".to_string()
+        } else {
+            format!("the other {n}")
+        };
+        let body = match self.old {
+            None => format!(
+                "Move {them} to {cat} too, and file new ones there from now on. You can still change any single one later."
+            ),
+            Some(old) if n == 0 => format!(
+                "{payee} usually goes under {}. File new ones under {cat} instead?",
+                store.category_name(Some(old))
+            ),
+            Some(old) => format!(
+                "{payee} usually goes under {}. Switch {} and new ones to {cat}? Ones you picked by hand stay.",
+                store.category_name(Some(old)),
+                if n == 1 {
+                    "that one".to_string()
+                } else {
+                    format!("those {n}")
+                },
+            ),
+        };
+        let (glyph, color) = store
+            .category(self.category)
+            .map(|c| (crate::icons::glyph(&c.icon), w::cat_color(c.color)))
+            .unwrap_or((ph::TAG, t.accent));
+        ui.horizontal(|ui| {
+            w::icon_badge(ui, t, glyph, color, 40.0);
+            ui.vertical(|ui| {
+                ui.label(
+                    egui::RichText::new(format!("Always use {cat} for {payee}?"))
+                        .font(theme::semibold(16.0))
+                        .color(t.text),
+                );
+                ui.label(w::subtle(t, body));
+            });
+        });
+        ui.add_space(18.0);
+        let mut all = false;
+        let mut one = false;
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let a = w::primary(ui, t, None, if n == 0 { "From now on" } else { "All of them" });
+                let o = w::ghost(ui, t, None, "Just this one");
+                crate::marks::record(|| "payee:all".into(), a.rect);
+                crate::marks::record(|| "payee:one".into(), o.rect);
+                (all, one) = (a.clicked(), o.clicked());
+            });
+        });
+        if one {
+            app.toasts.undoable("Transaction updated");
+            return Outcome::Close;
+        }
+        if !all {
+            return Outcome::Keep;
+        }
+        if let Some(moved) = app.toasts.ok(app.store.set_payee_category(&self.payee, self.category)) {
+            app.toasts.undoable(if moved == 0 {
+                format!("New {payee} ones go under {cat}")
+            } else {
+                format!("Moved {moved} to {cat}")
+            });
+        }
+        Outcome::Close
+    }
 }
 
 pub struct Confirm {
