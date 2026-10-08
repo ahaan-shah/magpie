@@ -190,9 +190,11 @@ crates/app   (magpie-finance) the eframe app; binary `magpie`
   - The maintainer tried and **rejected**: a cursive "calm", a serif
     headline (Fraunces), animated gradient waves, lavender/gold in the
     background, a satire that sounds mean. Keep it calm, orange-only, kind.
-  - Sections: hero (fits the dashboard near the fold), facts, tour (tabs +
-    screenshot sized so heading, image and caption fit one screen), install
-    (Linux & macOS / Windows switch, per-OS "Paste this in…" line), "Make it
+  - Sections: hero (fits the dashboard near the fold), facts, tour (tabs hug
+    the screenshot, which fills the rest of the row with a right margin
+    matching the tabs' left one; heading centred on the image), install
+    (Linux & macOS / Windows switch, per-OS "Paste this in…" line; Windows
+    also offers the setup .exe), "Make it
     yours" (card deck of eight theme screenshots, arrows only), the v5
     launch film (re-encoded, CRF 26, ~15 MB), testimonials (five made-up,
     kind jokes in an auto-advancing card deck), "Made by" card. In-page links
