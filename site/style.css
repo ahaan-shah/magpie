@@ -182,8 +182,12 @@ h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.08; }
 .facts strong { font-weight: 500; }
 .facts span { color: var(--text2); font-size: 14px; }
 
-/* Tour: sized so the screenshot and its caption fit on one screen. */
-.tour-body { display: grid; grid-template-columns: 180px 1fr; gap: 28px; align-items: start; }
+/* Tour: the tabs sit just left of the screenshot, which takes the rest of the
+   row, so its right margin matches the tabs' left one. The heading centres on
+   the screenshot rather than the page. */
+.tour { --tabs: 170px; --tabs-gap: 20px; }
+.tour h2 { padding-left: calc(var(--tabs) + var(--tabs-gap)); }
+.tour-body { display: grid; grid-template-columns: var(--tabs) 1fr; gap: var(--tabs-gap); align-items: start; }
 .tabs { display: flex; flex-direction: column; gap: 2px; }
 .tabs button {
   appearance: none; border: 0; background: transparent; cursor: pointer;
@@ -195,10 +199,7 @@ h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.08; }
 .tabs button[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent-text); font-weight: 500; }
 .tabs button:focus-visible, .seg button:focus-visible, .copy:focus-visible, .nav:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .frames {
-  display: grid; aspect-ratio: 1880 / 1240; margin: 0 auto;
-  width: min(100%, calc((100vh - 270px) * 1.516));
-  width: min(100%, calc((100svh - 270px) * 1.516));
-  min-width: min(100%, 520px);
+  display: grid; aspect-ratio: 1880 / 1240; margin: 0 auto; width: 100%;
 }
 .frames img { grid-area: 1 / 1; width: 100%; opacity: 0; transition: opacity .35s ease; }
 .frames img.on { opacity: 1; }
@@ -220,6 +221,14 @@ h1 { font-size: clamp(36px, 5vw, 60px); line-height: 1.08; }
   box-shadow: var(--shadow);
 }
 .installer [hidden] { display: none; }
+.direct {
+  margin: 22px auto 0; max-width: 620px; padding: 20px 24px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+}
+.direct p { margin: 0; color: var(--text2); font-size: 15.5px; }
+.direct code { font: 14px ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; color: var(--text); }
+.direct .btn svg { margin-right: 8px; }
 .cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font: 14px/1.5 ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; scrollbar-width: none; }
 .cmd code::-webkit-scrollbar { display: none; }
 .prompt { color: var(--accent); font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; user-select: none; }
@@ -313,6 +322,7 @@ footer a { color: var(--text2); }
 @media (max-width: 860px) {
   section { padding: 56px 16px; }
   .facts { grid-template-columns: 1fr 1fr; }
+  .tour h2 { padding-left: 0; }
   .tour-body { grid-template-columns: 1fr; gap: 16px; }
   .tabs {
     flex-direction: row; overflow-x: auto; gap: 4px;
