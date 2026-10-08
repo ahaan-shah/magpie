@@ -292,8 +292,9 @@ from the README until they're actually published. The PKGBUILD and cask in
 
 ## Where things stand
 
-- **Released:** up to v0.2.4 (payee suggestions with arrow keys; What's
-  new stays until read). v0.2.3 brought What's new, category type-ahead,
+- **Released:** up to v0.2.5 (payee default categories, migration v3).
+  v0.2.4 brought payee suggestions with arrow keys and What's new staying
+  until read. v0.2.3 brought What's new, category type-ahead,
   cleaner statement import and opening on Home; v0.2.2 brought paybacks; v0.2.1 brought Basic mode, the
   Magpie themes and database migration v2 for account card looks. v0.2.0 was the first release with
   Windows (0.1.5 was folded into 0.1.6). The repo was private until 0.1.6, then made public.
