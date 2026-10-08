@@ -624,8 +624,11 @@ fn categories_card(ui: &mut Ui, t: &Theme, store: &Store, d: &Dash, acts: &mut V
     let area = ui.available_rect_before_wrap();
     let donut_size = (area.height() - 4.0).min(area.width() * 0.5);
     let donut_rect = Rect::from_min_size(area.min, vec2(donut_size, donut_size));
-    let top: Vec<_> = d.cats.iter().take(6).collect();
-    let rest: i64 = d.cats.iter().skip(6).map(|x| x.1).sum();
+    // Group the tail into "Other" only when it holds two or more categories;
+    // a lone seventh one is shown under its own name.
+    let shown = if d.cats.len() == 7 { 7 } else { 6 };
+    let top: Vec<_> = d.cats.iter().take(shown).collect();
+    let rest: i64 = d.cats.iter().skip(shown).map(|x| x.1).sum();
     let mut slices: Vec<charts::Slice> = top
         .iter()
         .map(|(c, v)| {
