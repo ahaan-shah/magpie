@@ -33,6 +33,24 @@ pub struct Notes {
 /// and why it helps, not how it works.
 pub const RELEASES: &[Notes] = &[
     Notes {
+        version: "0.2.6",
+        items: &[
+            Item {
+                icon: ph::CHART_DONUT,
+                title: "A clearer \"Where it went\"",
+                body: "Big totals fit inside the chart, long category names no longer run into \
+                       the percentages, and categories that share a colour get different shades.",
+                image: None,
+            },
+            Item {
+                icon: ph::RULER,
+                title: "Big amounts fit",
+                body: "Large totals on Home shrink a little to stay clear of the charts beside them.",
+                image: None,
+            },
+        ],
+    },
+    Notes {
         version: "0.2.5",
         items: &[
             Item {

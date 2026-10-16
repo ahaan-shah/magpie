@@ -1148,6 +1148,66 @@ impl Shots {
     }
 }
 
+/// `MAGPIE_STILL_DIR=<dir> cargo test -p magpie-finance --profile fast donut_stills -- --ignored`
+/// renders "Where it went" and Reports' stacked bars at their worst: rupee
+/// totals, every category the same blue, and a long category name.
+#[test]
+#[ignore = "renders PNGs for visual review; run explicitly"]
+fn donut_stills() {
+    // SAFETY: single-threaded test setup before the app reads these.
+    unsafe {
+        std::env::set_var("MAGPIE_HEADLESS", "1");
+        std::env::set_var("MAGPIE_TODAY", "2026-09-29");
+    }
+    crate::marks::enable();
+    let out = std::env::var("MAGPIE_STILL_DIR")
+        .unwrap_or_else(|_| std::env::temp_dir().join("magpie-stills").display().to_string());
+    std::fs::create_dir_all(&out).expect("out dir");
+    for theme in ["Magpie Light", "Magpie Dark"] {
+        let dir = std::env::temp_dir().join(format!("magpie-donut-stills-{theme}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut store = magpie_core::Store::open(&dir).expect("store");
+        magpie_core::demo::generate(&mut store, magpie_core::Cur::new("INR").expect("INR"), 3, 0).expect("demo");
+        store.update_settings(|s| s.theme = theme.into()).expect("theme");
+        let cats: Vec<_> = store
+            .categories()
+            .iter()
+            .filter(|c| c.kind == magpie_core::CategoryKind::Expense)
+            .cloned()
+            .collect();
+        for (i, c) in cats.into_iter().enumerate() {
+            let name = if i % 3 == 0 {
+                format!("{} Maid and Wifi", c.name)
+            } else {
+                c.name.clone()
+            };
+            store
+                .save_category(magpie_core::Category {
+                    color: 0x5B8DEF,
+                    name,
+                    ..c
+                })
+                .expect("category");
+        }
+        let ctx = Context::default();
+        let mut app = App::with_context(&ctx, None, store);
+        let mut s = Shots {
+            ctx: ctx.clone(),
+            size: vec2(1100.0, 1300.0),
+            renderer: WgpuTestRenderer::new(),
+            t: 0.0,
+            out: out.clone(),
+            suffix: theme.to_lowercase().replace(' ', "-"),
+        };
+        app.go(&ctx, crate::app::Page::Dashboard);
+        let img = s.settle(&mut app, 80);
+        s.save(img, "donut-home");
+        app.go(&ctx, crate::app::Page::Reports);
+        let img = s.settle(&mut app, 80);
+        s.save(img, "donut-reports");
+    }
+}
+
 /// `MAGPIE_STILL_DIR=<dir> cargo test -p magpie-finance --profile fast payee_stills -- --ignored`
 /// changes a transaction's category, files the whole payee there, then
 /// overrides a single one, checking the store at each step.

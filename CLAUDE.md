@@ -132,6 +132,12 @@ crates/app   (magpie-finance) the eframe app; binary `magpie`
   that mention dates ("Statement From: 01/09/2026 … A/C Open Date") used to
   win as the header. Test with made-up data shaped like a real file; never
   commit a real statement.
+- **Charts and big numbers must fit:** category colours are user-picked
+  and often repeat, so pass neighbouring slices/stacks through
+  `charts::separate_colors` (it shifts a clashing one lighter or darker).
+  Amounts that sit next to a chart or inside a ring get `w::fit_size`
+  (shrink, never ellipsize a figure), labels get `w::text_fit`. Rupee and
+  yen totals are what break layouts; `donut_stills` renders the worst case.
 - **Hover by geometry** (`ui.rect_contains_pointer(rect)`) where widgets
   overlap; `resp.hovered()` caused an edit-button flicker on Accounts (there's
   a regression test).
@@ -292,7 +298,8 @@ from the README until they're actually published. The PKGBUILD and cask in
 
 ## Where things stand
 
-- **Released:** up to v0.2.5 (payee default categories, migration v3).
+- **Released:** up to v0.2.6 (donut and big-amount fit fixes). v0.2.5
+  brought payee default categories (migration v3).
   v0.2.4 brought payee suggestions with arrow keys and What's new staying
   until read. v0.2.3 brought What's new, category type-ahead,
   cleaner statement import and opening on Home; v0.2.2 brought paybacks; v0.2.1 brought Basic mode, the

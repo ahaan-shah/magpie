@@ -4,6 +4,20 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.6] - 2026-10-17
+
+Tidier charts when amounts are big or colours repeat.
+
+### Fixed
+- "Where it went": the total in the middle of the donut shrinks to fit
+  instead of touching the ring, long category names end with "…" instead of
+  running under the percentage, and two categories with the same colour next
+  to each other get different shades so they don't read as one slice. "Other"
+  is easier to see.
+- Reports' "Spending by category" bars do the same with repeated colours.
+- Large amounts on Home (the month card and the Spent, Income, Saved and Left
+  to spend tiles) shrink to stay clear of the savings ring and sparklines.
+
 ## [0.2.5] - 2026-10-09
 
 A default category for each payee, with room for one-offs.

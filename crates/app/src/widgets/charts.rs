@@ -646,6 +646,54 @@ pub fn stacked_bars(
     }
 }
 
+// ------------------------------------------------------------- colours
+
+/// Rough perceptual distance between two colours (the "redmean" weighting).
+fn color_distance(a: Color32, b: Color32) -> f32 {
+    let (r1, g1, b1) = (a.r() as f32, a.g() as f32, a.b() as f32);
+    let (r2, g2, b2) = (b.r() as f32, b.g() as f32, b.b() as f32);
+    let rm = (r1 + r2) / 2.0;
+    let (dr, dg, db) = (r1 - r2, g1 - g2, b1 - b2);
+    ((2.0 + rm / 256.0) * dr * dr + 4.0 * dg * dg + (2.0 + (255.0 - rm) / 256.0) * db * db).sqrt()
+}
+
+/// Categories pick their own colours, so neighbouring slices or stacked bars
+/// can share one (two blues side by side read as one slice). Keeps each
+/// colour unless it's too close to the one before it (and, on a ring, the
+/// first), in which case it takes a lighter or darker shade of itself.
+pub fn separate_colors(colors: &[Color32], ring: bool) -> Vec<Color32> {
+    const MIN: f32 = 90.0;
+    let mut out: Vec<Color32> = Vec::with_capacity(colors.len());
+    for (i, &c) in colors.iter().enumerate() {
+        let wraps = ring && i + 1 == colors.len() && i > 1;
+        let mut near: Vec<Color32> = out.last().copied().into_iter().collect();
+        if wraps {
+            near.push(out[0]);
+        }
+        let candidates = [
+            c,
+            motion::lerp_color(c, Color32::WHITE, 0.35),
+            motion::lerp_color(c, Color32::BLACK, 0.35),
+            motion::lerp_color(c, Color32::WHITE, 0.6),
+            motion::lerp_color(c, Color32::BLACK, 0.6),
+        ];
+        let score = |x: Color32| near.iter().map(|&n| color_distance(x, n)).fold(f32::MAX, f32::min);
+        let pick = candidates
+            .iter()
+            .copied()
+            .find(|&x| score(x) >= MIN)
+            .unwrap_or_else(|| {
+                candidates
+                    .iter()
+                    .copied()
+                    .max_by(|a, b| score(*a).total_cmp(&score(*b)))
+                    .unwrap_or(c)
+            });
+        out.push(pick);
+    }
+    out
+}
+
 // ------------------------------------------------------------- donut
 
 pub struct Slice {
@@ -723,6 +771,36 @@ pub fn donut(ui: &mut Ui, t: &Theme, id: Id, rect: Rect, slices: &[Slice], thick
         a += span;
     }
     hovered
+}
+
+/// The donut's centre figure and caption, shrunk to sit inside the hole
+/// with some air (long totals like ₹22,216.33 used to touch the ring).
+pub fn donut_center(ui: &Ui, t: &Theme, rect: Rect, thickness: f32, value: &str, caption: &str) {
+    let hole = rect.width().min(rect.height()) / 2.0 - 8.0 - thickness;
+    // The figure sits just above the middle, so its corners are slightly
+    // off-centre; 0.8 of the diameter keeps them clear of the ring.
+    let room = (hole * 2.0 * 0.8 - 8.0).max(0.0);
+    let p = ui.painter();
+    let size = super::fit_size(p, value, theme::display, 17.0, 9.0, room);
+    let center = rect.center();
+    // Keep the figure's baseline where it is and let it shrink upwards, so it
+    // never runs into the caption.
+    p.text(
+        center + vec2(0.0, 1.2 - 0.6 * size),
+        Align2::CENTER_CENTER,
+        value,
+        theme::display(size),
+        t.text,
+    );
+    super::text_fit(
+        p,
+        center + vec2(0.0, 12.0),
+        Align2::CENTER_CENTER,
+        caption,
+        theme::regular(11.5),
+        t.text3,
+        room,
+    );
 }
 
 /// Progress ring (goals, savings rate).
@@ -868,6 +946,27 @@ mod tests {
         assert!(max > min && step > 0.0);
         let (min, max, _) = axis(1200.0, 6300.0);
         assert!(min <= 1200.0 && max >= 6300.0);
+    }
+
+    #[test]
+    fn neighbours_never_share_a_colour() {
+        let blue = Color32::from_rgb(0x5B, 0x8D, 0xEF);
+        let orange = Color32::from_rgb(0xF2, 0x99, 0x4A);
+        // Distinct colours are left alone.
+        assert_eq!(separate_colors(&[blue, orange], true), vec![blue, orange]);
+        // A run of one colour alternates shades, around the ring too.
+        for n in 2..8 {
+            let out = separate_colors(&vec![blue; n], true);
+            assert_eq!(out[0], blue);
+            for i in 0..n {
+                let j = (i + 1) % n;
+                if i != j {
+                    assert!(color_distance(out[i], out[j]) > 40.0, "{n}: {i} vs {j}: {out:?}");
+                }
+            }
+        }
+        // A stack doesn't wrap, so the last may match the first.
+        assert_eq!(separate_colors(&[blue, orange, blue], false), vec![blue, orange, blue]);
     }
 
     #[test]

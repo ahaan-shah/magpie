@@ -183,11 +183,25 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     ui.label(egui::RichText::new(*label).font(theme::medium(12.5)).color(t.text2));
                 });
                 ui.add_space(4.0);
-                w::animated_amount(ui, Id::new(("kpi", i)), *value, base, theme::display(22.0), t.text);
                 let spark = Rect::from_min_max(
                     pos2(rect.right() - 110.0, rect.bottom() - 52.0),
                     pos2(rect.right() - 20.0, rect.bottom() - 20.0),
                 );
+                // Large totals shrink rather than run into the sparkline.
+                let room = if trend.len() > 1 {
+                    spark.left() - 10.0
+                } else {
+                    ui.max_rect().right()
+                } - ui.max_rect().left();
+                let size = w::fit_size(
+                    ui.painter(),
+                    &w::fmt_money(*value, base),
+                    theme::display,
+                    22.0,
+                    14.0,
+                    room,
+                );
+                w::animated_amount(ui, Id::new(("kpi", i)), *value, base, theme::display(size), t.text);
                 if trend.len() > 1 {
                     charts::sparkline(ui, Id::new(("kpi-spark", i)), spark, trend, *color);
                 }
@@ -570,13 +584,18 @@ fn this_month(ui: &mut Ui, t: &Theme, rect: Rect, d: &Dash) {
             t.text3,
         );
 
+        // Big totals (rupees, yen) shrink to stay clear of the ring. Sized
+        // on the final figure so the count-up doesn't make them wobble.
+        let room = ring_c.x - 44.0 - 14.0 - ui.max_rect().left();
+        let spent = w::fit_size(p, &w::fmt_money(d.this.expense, base), theme::display, 26.0, 15.0, room);
+        let income = w::fit_size(p, &w::fmt_money(d.this.income, base), theme::semibold, 17.0, 12.0, room);
         ui.label(w::faint(t, "Spent"));
         w::animated_amount(
             ui,
             Id::new("month-spent"),
             d.this.expense,
             base,
-            theme::display(26.0),
+            theme::display(spent),
             t.text,
         );
         ui.add_space(6.0);
@@ -586,7 +605,7 @@ fn this_month(ui: &mut Ui, t: &Theme, rect: Rect, d: &Dash) {
             Id::new("month-income"),
             d.this.income,
             base,
-            theme::semibold(17.0),
+            theme::semibold(income),
             t.pos,
         );
         ui.add_space(10.0);
@@ -643,31 +662,23 @@ fn categories_card(ui: &mut Ui, t: &Theme, store: &Store, d: &Dash, acts: &mut V
     if rest > 0 {
         slices.push(charts::Slice {
             value: rest as f32,
-            color: t.border,
+            // Between the border and faint text: the border alone vanished
+            // into the donut's track and its legend dot into the card.
+            color: motion::lerp_color(t.border, t.text3, 0.45),
             label: "Other".into(),
         });
     }
+    let colors = charts::separate_colors(&slices.iter().map(|s| s.color).collect::<Vec<_>>(), true);
+    for (s, c) in slices.iter_mut().zip(colors) {
+        s.color = c;
+    }
     let hovered = charts::donut(ui, t, Id::new("dash-donut"), donut_rect, &slices, 18.0);
     let total: i64 = d.cats.iter().map(|x| x.1).sum();
-    let p = ui.painter();
     let (title, value) = match hovered {
         Some(i) => (slices[i].label.clone(), slices[i].value as i64),
         None => ("Total".into(), total),
     };
-    p.text(
-        donut_rect.center() - vec2(0.0, 9.0),
-        Align2::CENTER_CENTER,
-        w::fmt_whole(value, base),
-        theme::display(17.0),
-        t.text,
-    );
-    p.text(
-        donut_rect.center() + vec2(0.0, 12.0),
-        Align2::CENTER_CENTER,
-        title,
-        theme::regular(11.5),
-        t.text3,
-    );
+    charts::donut_center(ui, t, donut_rect, 18.0, &w::fmt_whole(value, base), &title);
     if hovered.is_some_and(|i| i < top.len()) && ui.input(|i| i.pointer.primary_clicked()) {
         acts.push(Act::CategoryLedger(top[hovered.unwrap_or(0)].0, d.month));
     }
@@ -692,20 +703,23 @@ fn categories_card(ui: &mut Ui, t: &Theme, store: &Store, d: &Dash, acts: &mut V
             );
         }
         p.circle_filled(pos2(r.left() + 5.0, r.center().y), 4.0, s.color);
-        p.text(
-            pos2(r.left() + 16.0, r.center().y),
-            Align2::LEFT_CENTER,
-            &s.label,
-            theme::regular(12.5),
-            t.text,
-        );
         let pct = s.value / total.max(1) as f32 * 100.0;
-        p.text(
+        let pct = p.text(
             pos2(r.right(), r.center().y),
             Align2::RIGHT_CENTER,
             format!("{pct:.0}%"),
             theme::medium(12.0),
             t.text2,
+        );
+        // Long names stop short of the percentage instead of running under it.
+        w::text_fit(
+            p,
+            pos2(r.left() + 16.0, r.center().y),
+            Align2::LEFT_CENTER,
+            &s.label,
+            theme::regular(12.5),
+            t.text,
+            pct.left() - 10.0 - (r.left() + 16.0),
         );
         if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() && i < top.len() {
             acts.push(Act::CategoryLedger(top[i].0, d.month));

@@ -354,7 +354,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     );
                 } else {
                     w::card_header(ui, &t, "Spending by category", |_| {});
-                    let series: Vec<(String, egui::Color32, Vec<f32>)> = d
+                    let mut series: Vec<(String, egui::Color32, Vec<f32>)> = d
                         .trend
                         .iter()
                         .map(|(c, v)| {
@@ -366,6 +366,11 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                             )
                         })
                         .collect();
+                    // Stacked neighbours that share a colour would read as one.
+                    let colors = charts::separate_colors(&series.iter().map(|s| s.1).collect::<Vec<_>>(), false);
+                    for (s, c) in series.iter_mut().zip(colors) {
+                        s.1 = c;
+                    }
                     let r = ui.available_rect_before_wrap();
                     charts::stacked_bars(ui, &t, Id::new(("rep-trend", range)), r, &d.labels, &series, &fmt);
                 }

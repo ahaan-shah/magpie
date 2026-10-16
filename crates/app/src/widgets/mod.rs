@@ -1210,6 +1210,28 @@ pub fn elide(p: &egui::Painter, text: &str, font: &egui::FontId, max_w: f32) -> 
     chars[..lo].iter().collect::<String>().trim_end().to_string() + "…"
 }
 
+/// The largest size up to `size` (down to `min`) at which `text` fits in
+/// `max_w`, for figures that must not be cut short, like amounts.
+pub fn fit_size(
+    p: &egui::Painter,
+    text: &str,
+    font: impl Fn(f32) -> egui::FontId,
+    size: f32,
+    min: f32,
+    max_w: f32,
+) -> f32 {
+    let width = |s: f32| p.layout_no_wrap(text.to_string(), font(s), Color32::WHITE).size().x;
+    let w0 = width(size);
+    if w0 <= max_w || w0 <= 0.0 {
+        return size;
+    }
+    let mut s = (size * max_w / w0).floor().clamp(min, size);
+    while s > min && width(s) > max_w {
+        s -= 0.5;
+    }
+    s.max(min)
+}
+
 /// Paints text that never spills past `max_w` (ellipsized instead).
 #[allow(clippy::too_many_arguments)]
 pub fn text_fit(
