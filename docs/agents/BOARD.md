@@ -6,7 +6,7 @@ your line when the work is merged.
 
 | Topic | Branch | Areas / files | Status |
 |---|---|---|---|
-| Donut fit, neighbour colours; 0.2.6 release | agent/donut-fix | widgets/charts.rs, views/dashboard.rs, views/reports.rs, film.rs (stills), release files | in progress |
+| _(none active)_ | | | |
 
 ## Reserved
 
