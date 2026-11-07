@@ -199,7 +199,7 @@ crates/app   (magpie-finance) the eframe app; binary `magpie`
   budget it still means "a different amount that month". Picking another
   month moves that month's own amount there and jumps the page to it.
   Remove on a one-month budget clears only the month on screen.
-- **What's new after updates:**- **What's new after updates:** after an update, the sidebar's update spot
+- **What's new after updates:** after an update, the sidebar's update spot
   shows "What's new" (a gift with an accent dot). It opens a card of the
   release's points (`whatsnew.rs`); the row stays until the card has been
   opened and closed (the modal host calls `dismiss`; moving between pages
