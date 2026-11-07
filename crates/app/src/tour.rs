@@ -48,7 +48,7 @@ impl Tour {
         steps.push((Page::Settings, "Paper", Extra::Font("Plus Jakarta Sans")));
         steps.push((Page::Dashboard, "Latte", Extra::Font("JetBrains Mono")));
         steps.push((Page::Reports, "Midnight", Extra::Range(0)));
-        steps.push((Page::Reports, "Midnight", Extra::Range(5)));
+        steps.push((Page::Reports, "Midnight", Extra::Range(6)));
         Some(Tour {
             dir,
             steps,
@@ -76,7 +76,7 @@ impl Tour {
                 Extra::Palette(_) => app.palette.open = false,
                 Extra::Help => app.modal = None,
                 Extra::Font(_) => app.set_font(ctx, "Inter"),
-                Extra::Range(_) => app.reports.set_range(2),
+                Extra::Range(_) => app.reports.set_range(3),
             }
             let name = format!(
                 "{:02}-{}-{}.png",

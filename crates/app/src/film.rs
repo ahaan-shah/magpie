@@ -1289,6 +1289,124 @@ fn payee_stills() {
         let img = edit(&mut app, &mut shots, safeway[1].id, gifts);
         assert!(!matches!(app.modal, Some(crate::forms::Modal::Payee(_))));
         drop(img);
+        shots.settle(&mut app, 30);
+
+        // Sometimes it's groceries after all: keep both.
+        let img = edit(&mut app, &mut shots, safeway[2].id, groceries);
+        shots.save(img, "payee-ask-both");
+        shots.click(&mut app, "payee:both");
+        let img = shots.settle(&mut app, 40);
+        shots.save(img, "payee-both");
+        assert_eq!(app.store.payee_categories("Safeway"), vec![dining, groceries]);
+        let now = from(&app, "Safeway");
+        assert_eq!(now.iter().filter(|x| x.category == Some(groceries)).count(), 1);
+
+        // A new transaction offers both; the second row picks Groceries.
+        let f = crate::forms::TxnForm::new(&app.store, app.today);
+        app.open_modal(&ctx, crate::forms::Modal::Txn(f));
+        shots.settle(&mut app, 30);
+        ctx.memory_mut(|m| m.request_focus(Id::new("txn-payee")));
+        shots.step(&mut app, Vec::new());
+        shots.step(&mut app, vec![Event::Text("Safeway".into())]);
+        let img = shots.settle(&mut app, 20);
+        shots.save(img, "payee-several");
+        let key = |key| Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        };
+        shots.step(&mut app, vec![key(egui::Key::ArrowDown)]);
+        shots.step(&mut app, vec![key(egui::Key::ArrowDown)]);
+        shots.step(&mut app, vec![key(egui::Key::Enter)]);
+        let img = shots.settle(&mut app, 20);
+        shots.save(img, "payee-several-picked");
+        let Some(crate::forms::Modal::Txn(f)) = &app.modal else {
+            panic!("the form stays open")
+        };
+        assert_eq!(f.category_id(), Some(groceries));
+    }
+}
+
+/// `MAGPIE_STILL_DIR=<dir> cargo test -p magpie-finance --profile fast month_stills -- --ignored`
+/// renders Reports for last month (with "Where it went") and a budget set
+/// for last month only, from the month picker.
+#[test]
+#[ignore = "renders PNGs for visual review; run explicitly"]
+fn month_stills() {
+    // SAFETY: single-threaded test setup before the app reads these.
+    unsafe {
+        std::env::set_var("MAGPIE_HEADLESS", "1");
+        std::env::set_var("MAGPIE_TODAY", "2026-11-07");
+    }
+    crate::marks::enable();
+    let out = std::env::var("MAGPIE_STILL_DIR")
+        .unwrap_or_else(|_| std::env::temp_dir().join("magpie-stills").display().to_string());
+    std::fs::create_dir_all(&out).expect("out dir");
+    for theme in ["Magpie Light", "Magpie Dark"] {
+        let dir = std::env::temp_dir().join(format!("magpie-stills-month-{theme}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut store = magpie_core::Store::open(&dir).expect("store");
+        magpie_core::demo::generate(&mut store, magpie_core::Cur::new("INR").expect("INR"), 3, 0).expect("demo");
+        store.update_settings(|s| s.theme = theme.into()).expect("theme");
+        // A category with no budget yet, as if just made for a farewell.
+        let farewell = store
+            .save_category(magpie_core::Category {
+                id: 0,
+                name: "Farewell".into(),
+                kind: magpie_core::CategoryKind::Expense,
+                color: 0x8E6CEF,
+                icon: "graduation-cap".into(),
+                archived: false,
+            })
+            .expect("category");
+        let ctx = Context::default();
+        let mut app = App::with_context(&ctx, None, store);
+        let mut s = Shots {
+            ctx: ctx.clone(),
+            size: vec2(1280.0, 1900.0),
+            renderer: WgpuTestRenderer::new(),
+            t: 0.0,
+            out: out.clone(),
+            suffix: theme.to_lowercase().replace(' ', "-"),
+        };
+        app.reports.set_range(1);
+        app.go(&ctx, crate::app::Page::Reports);
+        let img = s.settle(&mut app, 80);
+        s.save(img, "reports-last-month");
+
+        // Budgets, in November: add one for October only.
+        s.size = vec2(1280.0, 1800.0);
+        app.go(&ctx, crate::app::Page::Budgets);
+        s.settle(&mut app, 40);
+        app.store
+            .edit_budgets("Add budget", &[farewell], |st| {
+                st.save_budget_plan(magpie_core::BudgetPlan {
+                    category: farewell,
+                    amount: 500_000,
+                    rollover: false,
+                    every_month: true,
+                })
+            })
+            .expect("plan");
+        app.budgets.edit(farewell, "5000.00".into());
+        s.settle(&mut app, 40);
+        s.click(&mut app, "bmonth");
+        let img = s.settle(&mut app, 30);
+        s.save(img, "budget-month-picker");
+        s.click(&mut app, "bmonth:2026-10");
+        let img = s.settle(&mut app, 30);
+        s.save(img, "budget-only-for-october");
+        s.click(&mut app, "budget:save");
+        let img = s.settle(&mut app, 60);
+        s.save(img, "budget-saved-october");
+        let (oct, nov) = (
+            magpie_core::Month { year: 2026, month: 10 },
+            magpie_core::Month { year: 2026, month: 11 },
+        );
+        assert_eq!(magpie_core::budget::planned(&app.store, farewell, oct), Some(500_000));
+        assert_eq!(magpie_core::budget::planned(&app.store, farewell, nov), None);
     }
 }
 

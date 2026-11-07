@@ -275,6 +275,9 @@ pub struct BudgetPlan {
     pub amount: i64,
     /// Carry unspent (or overspent) money into the next month.
     pub rollover: bool,
+    /// `false` for a budget that only exists in the months it has an
+    /// override for (say, a farewell in October); `amount` is then unused.
+    pub every_month: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]

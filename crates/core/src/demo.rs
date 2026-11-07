@@ -397,6 +397,7 @@ pub fn generate(store: &mut Store, base: Cur, months: i32, extra: usize) -> Resu
                 category: c,
                 amount: usd(store, amount),
                 rollover,
+                every_month: true,
             })?;
         }
     }

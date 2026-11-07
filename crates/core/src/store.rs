@@ -62,10 +62,13 @@ enum Op {
     Update(Vec<(Txn, Txn)>),
     /// Snapshots of budget categories (plan + overrides) to restore.
     Budget(Vec<BudgetSnapshot>),
-    /// A payee's default category to restore, plus the transactions that
-    /// were moved along with it.
-    Payee(String, Option<Id>, Vec<(Txn, Txn)>),
+    /// A payee's categories to restore, plus the transactions that were
+    /// moved along with them.
+    Payee(String, PayeeSnapshot, Vec<(Txn, Txn)>),
 }
+
+/// A payee's main category and the extra ones it's also filed under.
+type PayeeSnapshot = (Option<Id>, Vec<Id>);
 
 type BudgetSnapshot = (Id, Option<BudgetPlan>, Vec<(Month, i64)>);
 
@@ -90,6 +93,9 @@ pub struct Store {
     receipts: Vec<Receipt>,
     /// Default category per payee, keyed by [`payee_key`].
     payees: HashMap<String, Id>,
+    /// Further categories a payee is also filed under (a shop for both
+    /// groceries and dining), in the order they were added.
+    payee_extras: HashMap<String, Vec<Id>>,
     pub rates: Rates,
     settings: Settings,
     version: u64,
@@ -173,6 +179,13 @@ impl Store {
             contributions: db.contributions()?,
             receipts: db.receipts()?,
             payees: db.payee_categories()?.into_iter().collect(),
+            payee_extras: db.payee_extra_categories()?.into_iter().fold(
+                HashMap::new(),
+                |mut m: HashMap<String, Vec<Id>>, (p, c)| {
+                    m.entry(p).or_default().push(c);
+                    m
+                },
+            ),
             rates,
             settings,
             version: 1,
@@ -527,6 +540,10 @@ impl Store {
         self.plans.retain(|p| p.category != id);
         self.overrides.retain(|(c, _), _| *c != id);
         self.payees.retain(|_, c| *c != id);
+        for v in self.payee_extras.values_mut() {
+            v.retain(|c| *c != id);
+        }
+        self.payee_extras.retain(|_, v| !v.is_empty());
         self.undo.clear();
         self.redo.clear();
         self.touch();
@@ -794,9 +811,9 @@ impl Store {
                 }
                 Op::Update(pairs.iter().map(|(b, a)| (a.clone(), b.clone())).collect())
             }
-            Op::Payee(payee, category, pairs) => {
-                let now = self.payees.get(payee).copied();
-                self.raw_set_payee(payee, *category)?;
+            Op::Payee(payee, snap, pairs) => {
+                let now = self.payee_snapshot(payee);
+                self.raw_set_payee(payee, snap)?;
                 for (before, _) in pairs {
                     self.raw_update(before.clone())?;
                 }
@@ -893,6 +910,15 @@ impl Store {
         self.payees.get(&payee_key(payee)).copied()
     }
 
+    /// Every category a payee is filed under: the main one first, then any
+    /// added with [`Store::add_payee_category`].
+    pub fn payee_categories(&self, payee: &str) -> Vec<Id> {
+        let key = payee_key(payee);
+        let mut v: Vec<Id> = self.payees.get(&key).copied().into_iter().collect();
+        v.extend(self.payee_extras.get(&key).into_iter().flatten().copied());
+        v
+    }
+
     /// The transactions that [`Store::set_payee_category`] would move to
     /// `category`. With no default yet that's every one from the payee;
     /// otherwise only those still on the old default (or uncategorized), so
@@ -920,10 +946,13 @@ impl Store {
             return Ok(0);
         }
         let ids = self.payee_txns_to_move(payee, category);
-        let before = self.payees.get(&key).copied();
+        let before = self.payee_snapshot(&key);
+        // It becomes the main one; the other extras stay.
+        let extras: Vec<Id> = before.1.iter().copied().filter(|c| *c != category).collect();
         let mut pairs = Vec::with_capacity(ids.len());
         self.db.batch(|db| {
             db.set_payee_category(&key, Some(category))?;
+            db.set_payee_extra_categories(&key, &extras)?;
             for id in &ids {
                 if let Some(b) = self.txns.iter().find(|t| t.id == *id) {
                     let mut a = b.clone();
@@ -935,6 +964,7 @@ impl Store {
             Ok(())
         })?;
         self.payees.insert(key.clone(), category);
+        self.set_extras(&key, extras);
         for (_, a) in &pairs {
             self.remove(a.id);
             self.place(a.clone());
@@ -946,12 +976,61 @@ impl Store {
         Ok(n)
     }
 
-    fn raw_set_payee(&mut self, key: &str, category: Option<Id>) -> Result<()> {
-        self.db.set_payee_category(key, category)?;
+    /// Files `payee` under `category` as well as what it already uses,
+    /// moving nothing: a shop that's sometimes groceries, sometimes dining.
+    /// With no main category yet, `main` (what its other transactions use)
+    /// becomes it. One undoable step.
+    pub fn add_payee_category(&mut self, payee: &str, category: Id, main: Option<Id>) -> Result<()> {
+        let key = payee_key(payee);
+        if key.is_empty() || self.category(category).is_none() || self.payee_categories(payee).contains(&category) {
+            return Ok(());
+        }
+        let before = self.payee_snapshot(&key);
+        let main = before
+            .0
+            .or(main.filter(|m| *m != category && self.category(*m).is_some()));
+        let mut after = (main, before.1.clone());
+        match main {
+            Some(_) => after.1.push(category),
+            None => after.0 = Some(category),
+        }
+        self.raw_set_payee(&key, &after)?;
+        let names: Vec<&str> = self
+            .payee_categories(payee)
+            .iter()
+            .map(|c| self.category_name(Some(*c)))
+            .collect();
+        let label = format!("File {} under {}", payee.trim(), names.join(" and "));
+        self.record(label, Op::Payee(key, before, Vec::new()));
+        self.touch();
+        Ok(())
+    }
+
+    fn payee_snapshot(&self, key: &str) -> PayeeSnapshot {
+        (
+            self.payees.get(key).copied(),
+            self.payee_extras.get(key).cloned().unwrap_or_default(),
+        )
+    }
+
+    fn set_extras(&mut self, key: &str, extras: Vec<Id>) {
+        if extras.is_empty() {
+            self.payee_extras.remove(key);
+        } else {
+            self.payee_extras.insert(key.to_string(), extras);
+        }
+    }
+
+    fn raw_set_payee(&mut self, key: &str, (category, extras): &PayeeSnapshot) -> Result<()> {
+        self.db.batch(|db| {
+            db.set_payee_category(key, *category)?;
+            db.set_payee_extra_categories(key, extras)
+        })?;
         match category {
-            Some(c) => self.payees.insert(key.to_string(), c),
+            Some(c) => self.payees.insert(key.to_string(), *c),
             None => self.payees.remove(key),
         };
+        self.set_extras(key, extras.clone());
         Ok(())
     }
 
@@ -967,6 +1046,11 @@ impl Store {
 
     pub fn budget_override(&self, category: Id, m: Month) -> Option<i64> {
         self.overrides.get(&(category, m)).copied()
+    }
+
+    /// Whether any month has its own amount for `category`.
+    pub fn has_budget_overrides(&self, category: Id) -> bool {
+        self.overrides.keys().any(|(c, _)| *c == category)
     }
 
     pub fn save_budget_plan(&mut self, p: BudgetPlan) -> Result<()> {
@@ -1275,6 +1359,62 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn payee_can_have_several_categories() {
+        let mut s = fixture();
+        let food = s.find_category("Food").unwrap().id;
+        let salary = s.find_category("Salary").unwrap().id;
+        let mut t = Txn::blank(s.accounts()[0].id, date(2026, 3, 1));
+        t.amount = -1_000;
+        t.payee = "Corner Cafe".into();
+        t.category = Some(food);
+        let a = s.add_txn(t).unwrap();
+
+        // No main category yet: what its transactions use becomes it, and
+        // nothing moves.
+        s.add_payee_category("corner cafe", salary, Some(food)).unwrap();
+        assert_eq!(s.payee_categories("Corner Cafe"), vec![food, salary]);
+        assert_eq!(s.payee_category("Corner Cafe"), Some(food));
+        assert_eq!(s.txn(a).unwrap().category, Some(food));
+        let idx = crate::analytics::payee_index(&s);
+        let p = idx.iter().find(|p| p.name == "Corner Cafe").unwrap();
+        assert_eq!((p.category, p.also.clone()), (Some(food), vec![salary]));
+
+        // Undo is one step back to nothing; redo brings both.
+        s.undo().unwrap();
+        assert!(s.payee_categories("Corner Cafe").is_empty());
+        s.redo().unwrap();
+        assert_eq!(s.payee_categories("Corner Cafe"), vec![food, salary]);
+
+        // Making the extra one the main one keeps no duplicate.
+        s.set_payee_category("Corner Cafe", salary).unwrap();
+        assert_eq!(s.payee_categories("Corner Cafe"), vec![salary]);
+        s.undo().unwrap();
+        assert_eq!(s.payee_categories("Corner Cafe"), vec![food, salary]);
+
+        // Saved, reloaded, and dropped with its category.
+        let dir = std::env::temp_dir().join(format!("magpie-payees-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        {
+            let mut d = Store::open(&dir).unwrap();
+            let mut ids = Vec::new();
+            for id in [food, salary] {
+                let mut c = s.category(id).unwrap().clone();
+                c.id = 0;
+                ids.push(d.save_category(c).unwrap());
+            }
+            d.add_payee_category("Corner Cafe", ids[0], None).unwrap();
+            d.add_payee_category("Corner Cafe", ids[1], None).unwrap();
+        }
+        let mut d = Store::open(&dir).unwrap();
+        let set = d.payee_categories("corner cafe");
+        assert_eq!(set.len(), 2);
+        d.delete_category(set[1]).unwrap();
+        drop(d);
+        assert_eq!(Store::open(&dir).unwrap().payee_categories("corner cafe"), vec![set[0]]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn budget_edits_undo() {
         let mut s = fixture();
         let food = s.find_category("Food").unwrap().id;
@@ -1282,6 +1422,7 @@ pub(crate) mod tests {
             category: food,
             amount: 100,
             rollover: false,
+            every_month: true,
         })
         .unwrap();
         s.edit_budgets("Fit budgets to average", &[food], |s| {
@@ -1289,6 +1430,7 @@ pub(crate) mod tests {
                 category: food,
                 amount: 500,
                 rollover: true,
+                every_month: true,
             })?;
             s.set_budget_override(food, Month { year: 2026, month: 1 }, Some(9))
         })
@@ -1313,6 +1455,7 @@ pub(crate) mod tests {
             category: food,
             amount: 10_000,
             rollover: false,
+            every_month: true,
         })
         .unwrap();
         s.add_txn(txn(&s, date(2026, 1, 1), -500, "Food")).unwrap();

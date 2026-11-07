@@ -33,10 +33,13 @@ impl BudgetLine {
     }
 }
 
-/// The budgeted amount for a category in a month, if it has a plan.
+/// The budgeted amount for a category in a month, if it has one then: a
+/// monthly plan, or a one-month budget set for `m`.
 pub fn planned(store: &Store, cat: Id, m: Month) -> Option<i64> {
     let plan = store.budget_plan(cat)?;
-    Some(store.budget_override(cat, m).unwrap_or(plan.amount))
+    store
+        .budget_override(cat, m)
+        .or(plan.every_month.then_some(plan.amount))
 }
 
 /// How far through month `m` we are on `today`: 0..=1 (1 for past months).
@@ -151,6 +154,7 @@ mod tests {
             category: food,
             amount: 2_000,
             rollover: false,
+            every_month: true,
         })
         .unwrap();
         s.add_txn(txn(&s, date(2026, 4, 3), -1_000, "Food")).unwrap();
@@ -170,6 +174,7 @@ mod tests {
             category: food,
             amount: 10_000,
             rollover: true,
+            every_month: true,
         })
         .unwrap();
         s.add_txn(txn(&s, date(2026, 1, 5), -6_000, "Food")).unwrap();
@@ -195,6 +200,7 @@ mod tests {
             category: food,
             amount: 5_000,
             rollover: false,
+            every_month: true,
         })
         .unwrap();
         for m in 1..=3 {
@@ -204,5 +210,29 @@ mod tests {
         assert_eq!(month_budget(&s, apr)[0].carry, 0);
         assert_eq!(average_spend(&s, food, apr, 3), 3_100);
         assert!((month_progress(apr, date(2026, 4, 15)) - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn one_month_budget_shows_only_in_its_months() {
+        let mut s = fixture();
+        let food = s.find_category("Food").unwrap().id;
+        let (oct, nov, dec) = (
+            Month { year: 2026, month: 10 },
+            Month { year: 2026, month: 11 },
+            Month { year: 2026, month: 12 },
+        );
+        s.save_budget_plan(BudgetPlan {
+            category: food,
+            amount: 0,
+            rollover: false,
+            every_month: false,
+        })
+        .unwrap();
+        s.set_budget_override(food, oct, Some(5_000)).unwrap();
+        s.set_budget_override(food, dec, Some(2_000)).unwrap();
+        assert_eq!(planned(&s, food, oct), Some(5_000));
+        assert_eq!(planned(&s, food, nov), None);
+        assert!(month_budget(&s, nov).is_empty());
+        assert_eq!(month_budget(&s, dec)[0].planned, 2_000);
     }
 }

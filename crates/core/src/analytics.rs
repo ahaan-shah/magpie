@@ -297,6 +297,9 @@ pub fn category_trend_spans(store: &Store, spans: &[(Date, Date)], k: usize) -> 
 pub struct PayeeInfo {
     pub name: String,
     pub category: Option<Id>,
+    /// Other categories the payee is filed under too (see
+    /// [`Store::add_payee_category`]); suggestions offer each.
+    pub also: Vec<Id>,
     pub account: Id,
     pub last_amount: i64,
     pub count: usize,
@@ -311,6 +314,7 @@ pub fn payee_index(store: &Store) -> Vec<PayeeInfo> {
         let e = map.entry(t.payee.to_lowercase()).or_insert_with(|| PayeeInfo {
             name: t.payee.clone(),
             category: None,
+            also: Vec::new(),
             account: t.account,
             last_amount: 0,
             count: 0,
@@ -325,8 +329,10 @@ pub fn payee_index(store: &Store) -> Vec<PayeeInfo> {
     let mut v: Vec<_> = map.into_values().collect();
     // A default the user set beats whatever the last transaction used.
     for p in &mut v {
-        if let Some(c) = store.payee_category(&p.name) {
+        let mut set = store.payee_categories(&p.name).into_iter();
+        if let Some(c) = set.next() {
             p.category = Some(c);
+            p.also = set.collect();
         }
     }
     v.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.name.cmp(&b.name)));

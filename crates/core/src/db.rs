@@ -124,6 +124,17 @@ pub(crate) const MIGRATIONS: &[&str] = &[
         category_id  INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE
     );
     "#,
+    // v4: budgets for single months, and payees filed under more than one
+    // category. Older versions ignore both: a one-month budget reads as a
+    // monthly one there, and a payee keeps its main category.
+    r#"
+    ALTER TABLE budget_plans ADD COLUMN every_month INTEGER NOT NULL DEFAULT 1;
+    CREATE TABLE payee_extra_categories (
+        payee        TEXT NOT NULL,
+        category_id  INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+        PRIMARY KEY (payee, category_id)
+    );
+    "#,
 ];
 
 pub struct Db {
@@ -369,6 +380,27 @@ impl Db {
         Ok(())
     }
 
+    pub fn payee_extra_categories(&self) -> Result<Vec<(String, Id)>> {
+        let mut st = self
+            .conn
+            .prepare("SELECT payee, category_id FROM payee_extra_categories ORDER BY rowid")?;
+        let rows = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// Replaces a payee's extra categories (beyond its main one).
+    pub fn set_payee_extra_categories(&self, payee: &str, categories: &[Id]) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM payee_extra_categories WHERE payee = ?1", [payee])?;
+        for c in categories {
+            self.conn.execute(
+                "INSERT OR IGNORE INTO payee_extra_categories(payee, category_id) VALUES (?1, ?2)",
+                params![payee, c],
+            )?;
+        }
+        Ok(())
+    }
+
     // ---------- transactions ----------
 
     fn txn_row(r: &Row) -> rusqlite::Result<Txn> {
@@ -453,12 +485,13 @@ impl Db {
     pub fn budget_plans(&self) -> Result<Vec<BudgetPlan>> {
         let mut st = self
             .conn
-            .prepare("SELECT category_id, amount, rollover FROM budget_plans")?;
+            .prepare("SELECT category_id, amount, rollover, every_month FROM budget_plans")?;
         let rows = st.query_map([], |r| {
             Ok(BudgetPlan {
                 category: r.get(0)?,
                 amount: r.get(1)?,
                 rollover: r.get(2)?,
+                every_month: r.get(3)?,
             })
         })?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
@@ -466,9 +499,10 @@ impl Db {
 
     pub fn save_budget_plan(&self, p: &BudgetPlan) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO budget_plans(category_id, amount, rollover) VALUES (?1,?2,?3)
-             ON CONFLICT(category_id) DO UPDATE SET amount=excluded.amount, rollover=excluded.rollover",
-            params![p.category, p.amount, p.rollover],
+            "INSERT INTO budget_plans(category_id, amount, rollover, every_month) VALUES (?1,?2,?3,?4)
+             ON CONFLICT(category_id) DO UPDATE SET amount=excluded.amount, rollover=excluded.rollover,
+                 every_month=excluded.every_month",
+            params![p.category, p.amount, p.rollover, p.every_month],
         )?;
         Ok(())
     }

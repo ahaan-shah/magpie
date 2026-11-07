@@ -23,7 +23,7 @@ pub struct State {
 impl Default for State {
     fn default() -> Self {
         State {
-            range: 2,
+            range: 3,
             from: None,
             to: None,
             memo: Memo::default(),
@@ -37,15 +37,16 @@ impl State {
     }
 }
 
-const RANGES: [&str; 6] = [
+const RANGES: [&str; 7] = [
     "This month",
+    "Last month",
     "3 months",
     "6 months",
     "12 months",
     "Year to date",
     "Custom",
 ];
-const CUSTOM: usize = 5;
+const CUSTOM: usize = 6;
 
 /// How the charts bucket the period: days for about a month, weeks for a
 /// quarter, months beyond that.
@@ -65,6 +66,8 @@ struct Data {
     nw_labels: Vec<String>,
     nw: Vec<i64>,
     trend: analytics::Series,
+    /// Spending per category, biggest first, for the donut.
+    by_cat: Vec<(Option<RowId>, i64)>,
     cats: Vec<(Option<RowId>, i64, Vec<f32>)>,
     payees: Vec<(String, i64, usize)>,
     heat_start: Date,
@@ -96,10 +99,12 @@ fn period(st: &State, today: Date) -> (Date, Date) {
     let trailing = |n: i32| (this.add(1 - n).first(), today);
     match st.range {
         0 => trailing(1),
-        1 => trailing(3),
-        2 => trailing(6),
-        3 => trailing(12),
-        4 => (Date::new(today.year(), 1, 1).unwrap_or(today), today),
+        // Finishing last month's entries after the new one has started.
+        1 => (this.prev().first(), this.prev().last()),
+        2 => trailing(3),
+        3 => trailing(6),
+        4 => trailing(12),
+        5 => (Date::new(today.year(), 1, 1).unwrap_or(today), today),
         _ => {
             let (from, to) = custom(st, today);
             (from.min(to), from.max(to))
@@ -161,10 +166,11 @@ fn build(store: &Store, from: Date, to: Date) -> Data {
     let (grain, spans, labels) = spans(from, to);
     let cashflow: Vec<Totals> = spans.iter().map(|(a, b)| analytics::totals(store, *a, *b)).collect();
     let total = analytics::totals(store, from, to);
-    let cats = analytics::spending_by_category(store, from, to)
-        .into_iter()
+    let by_cat = analytics::spending_by_category(store, from, to);
+    let cats = by_cat
+        .iter()
         .take(12)
-        .map(|(c, v)| {
+        .map(|&(c, v)| {
             let series = spans
                 .iter()
                 .map(|(a, b)| {
@@ -202,6 +208,7 @@ fn build(store: &Store, from: Date, to: Date) -> Data {
         nw: analytics::net_worth_at(store, &ends),
         nw_labels,
         trend: analytics::category_trend_spans(store, &spans, 6),
+        by_cat,
         cats,
         payees: analytics::top_payees(store, from, to, 8),
         heat: analytics::daily_spend(store, heat_start, heat_end),
@@ -378,24 +385,39 @@ pub fn show(app: &mut App, ui: &mut Ui) {
         })
     });
 
-    // Category table + payees
-    // Rows are 38pt plus 8pt item spacing; add the card's padding and header.
-    let rows_h = 96.0 + d.cats.len().max(d.payees.len()).max(3) as f32 * 46.0;
-    w::grid_row(ui, rows_h, &[1.6, 1.0], |i, ui, rect| {
+    // Where it went + payees. Payees scroll past the donut's height.
+    let mut clicked = None;
+    w::grid_row(ui, 330.0, &[1.0, 1.0], |i, ui, rect| {
         w::with_reveal(ui, shown, 7 + i, rect, |ui, rect| {
-            w::card_scroll(ui, &t, ("reports-lists", i), rect, |ui| {
-                if i == 0 {
-                    category_table(ui, &t, store, &d, base, units, per);
-                } else {
-                    payees(ui, &t, &d, base);
-                }
+            if i == 0 {
+                w::card_in(ui, &t, rect, |ui| {
+                    w::card_header(ui, &t, "Where it went", |_| {});
+                    if d.by_cat.is_empty() {
+                        w::empty_state(ui, &t, ph::CHART_DONUT, "No spending in this period", "");
+                    } else {
+                        clicked = crate::views::dashboard::donut_legend(ui, &t, store, &d.by_cat, "rep");
+                    }
+                })
+            } else {
+                w::card_scroll(ui, &t, ("reports-lists", 1), rect, |ui| payees(ui, &t, &d, base))
+            }
+        })
+    });
+
+    // Category table
+    // Rows are 38pt plus 8pt item spacing; add the card's padding and header.
+    let rows_h = 96.0 + d.cats.len().max(3) as f32 * 46.0;
+    w::grid_row(ui, rows_h, &[1.0], |_, ui, rect| {
+        w::with_reveal(ui, shown, 9, rect, |ui, rect| {
+            w::card_scroll(ui, &t, ("reports-lists", 0), rect, |ui| {
+                category_table(ui, &t, store, &d, base, units, per)
             })
         })
     });
 
     // Heatmap
     w::grid_row(ui, 200.0, &[1.0], |_, ui, rect| {
-        w::with_reveal(ui, shown, 9, rect, |ui, rect| {
+        w::with_reveal(ui, shown, 10, rect, |ui, rect| {
             w::card_in(ui, &t, rect, |ui| {
                 w::card_header(ui, &t, "Spending calendar", |ui| {
                     ui.label(w::faint(&t, "12 months to the end of the period"));
@@ -406,7 +428,15 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             })
         })
     });
-    let _ = Page::Reports;
+    // The ledger filters by whole months, so a slice opens it only when the
+    // period is one month.
+    if let Some(c) = clicked
+        && Month::of(from) == Month::of(to)
+    {
+        let ctx = ui.ctx().clone();
+        app.ledger.show_category(c, Month::of(from));
+        app.go(&ctx, Page::Ledger);
+    }
 }
 
 fn category_table(ui: &mut Ui, t: &Theme, store: &Store, d: &Data, base: Cur, units: f64, per: &str) {
@@ -538,11 +568,12 @@ mod tests {
     }
 
     #[test]
-    fn presets_end_today() {
+    fn presets_end_today_except_last_month() {
         let today = d("2026-10-01");
         let mut st = State::default();
         let want = [
             ("2026-10-01", "2026-10-01"),
+            ("2026-09-01", "2026-09-30"),
             ("2026-08-01", "2026-10-01"),
             ("2026-05-01", "2026-10-01"),
             ("2025-11-01", "2026-10-01"),

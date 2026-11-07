@@ -17,6 +17,11 @@ pub struct State {
     open: Option<RowId>,
     amount: String,
     this_month_only: bool,
+    /// The month "Only for" applies to: the one on screen unless picked.
+    only_month: Month,
+    /// The open budget was just created, so "Only for" makes it a budget
+    /// for that month alone rather than a different amount in one month.
+    fresh: bool,
     /// Keyboard-selected row.
     sel: Option<usize>,
     memo: Memo<(u64, Month, Date), Rc<Data>>,
@@ -28,6 +33,8 @@ impl State {
         self.open = Some(category);
         self.amount = amount;
         self.this_month_only = false;
+        self.only_month = self.month;
+        self.fresh = true;
     }
 
     pub fn new(today: Date) -> State {
@@ -36,6 +43,8 @@ impl State {
             open: None,
             amount: String::new(),
             this_month_only: false,
+            only_month: Month::of(today),
+            fresh: false,
             sel: None,
             memo: Memo::default(),
         }
@@ -55,7 +64,7 @@ fn build(store: &Store, m: Month) -> Data {
         .into_iter()
         .filter(|(c, v)| {
             *v > 0
-                && store.budget_plan(*c).is_none()
+                && budget::planned(store, *c, m).is_none()
                 && store.category(*c).is_some_and(|x| x.kind == CategoryKind::Expense)
         })
         .collect();
@@ -76,7 +85,8 @@ fn build(store: &Store, m: Month) -> Data {
 enum Act {
     Open(RowId),
     Close,
-    Save(RowId, i64, bool, bool),
+    /// Category, amount, rollover, and the month for "Only for".
+    Save(RowId, i64, bool, Option<Month>),
     Remove(RowId),
     Add(RowId, i64),
     FillAverages,
@@ -144,7 +154,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             let unplanned: Vec<_> = store
                 .categories()
                 .iter()
-                .filter(|c| c.kind == CategoryKind::Expense && !c.archived && store.budget_plan(c.id).is_none())
+                .filter(|c| c.kind == CategoryKind::Expense && !c.archived && budget::planned(store, c.id, m).is_none())
                 .collect();
             w::dropdown(ui, "budget-add", format!("{}  Add budget", ph::PLUS), 210.0, |ui| {
                 if w::option(
@@ -339,16 +349,28 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                     st.open = Some(c);
                     let planned = budget::planned(&app.store, c, m).unwrap_or(0);
                     st.amount = money::to_input(planned, base);
-                    st.this_month_only = app.store.budget_override(c, m).is_some();
+                    st.this_month_only = app.store.budget_override(c, m).is_some()
+                        || app.store.budget_plan(c).is_some_and(|p| !p.every_month);
+                    st.only_month = m;
+                    st.fresh = false;
                 }
             }
             Act::Close => app.budgets.open = None,
-            Act::Save(c, amount, rollover, only_month) => {
+            Act::Save(c, amount, rollover, only) => {
+                let fresh = app.budgets.fresh;
                 let r = app.store.edit_budgets("Edit budget", &[c], |s| {
-                    if only_month {
-                        s.set_budget_override(c, m, Some(amount))?;
+                    if let Some(x) = only {
+                        // Picking another month moves this month's own
+                        // amount there; a monthly budget stays monthly.
+                        if x != m && s.budget_override(c, m).is_some() {
+                            s.set_budget_override(c, m, None)?;
+                        }
+                        s.set_budget_override(c, x, Some(amount))?;
                         if let Some(mut p) = s.budget_plan(c).cloned() {
                             p.rollover = rollover;
+                            // A budget made just now and set for one month
+                            // exists only there.
+                            p.every_month &= !fresh;
                             s.save_budget_plan(p)?;
                         }
                         Ok(())
@@ -358,18 +380,36 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                             category: c,
                             amount,
                             rollover,
+                            every_month: true,
                         })
                     }
                 });
                 if app.toasts.ok(r).is_some() {
-                    app.toasts.undoable("Budget saved");
+                    match only {
+                        Some(x) if x != m => {
+                            // Show it where it went.
+                            app.toasts.undoable(format!("Budget saved for {}", x.label()));
+                            app.budgets.month = x;
+                        }
+                        _ => app.toasts.undoable("Budget saved"),
+                    }
                     app.budgets.open = None;
                 }
             }
             Act::Remove(c) => {
-                let r = app
-                    .store
-                    .edit_budgets("Remove budget", &[c], |s| s.delete_budget_plan(c));
+                let r = app.store.edit_budgets("Remove budget", &[c], |s| {
+                    // A one-month budget goes from this month only; the
+                    // category's budget goes once no month has one.
+                    if s.budget_plan(c).is_some_and(|p| !p.every_month) {
+                        s.set_budget_override(c, m, None)?;
+                        if !s.has_budget_overrides(c) {
+                            s.delete_budget_plan(c)?;
+                        }
+                        Ok(())
+                    } else {
+                        s.delete_budget_plan(c)
+                    }
+                });
                 if app.toasts.ok(r).is_some() {
                     app.toasts.undoable("Budget removed");
                     app.budgets.open = None;
@@ -378,10 +418,15 @@ pub fn show(app: &mut App, ui: &mut Ui) {
             Act::Add(c, amount) => {
                 let amount = round_up(amount, base.scale() * 10);
                 let r = app.store.edit_budgets("Add budget", &[c], |s| {
+                    // Already budgeted for other single months: add this one.
+                    if s.budget_plan(c).is_some_and(|p| !p.every_month) {
+                        return s.set_budget_override(c, m, Some(amount));
+                    }
                     s.save_budget_plan(BudgetPlan {
                         category: c,
                         amount,
                         rollover: false,
+                        every_month: true,
                     })
                 });
                 if app.toasts.ok(r).is_some() {
@@ -398,6 +443,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                             category: l.category,
                             amount: round_up(avg, base.scale() * 10),
                             rollover: l.rollover,
+                            every_month: app.store.budget_plan(l.category).is_none_or(|p| p.every_month),
                         })
                     })
                     .collect();
@@ -405,8 +451,13 @@ pub fn show(app: &mut App, ui: &mut Ui) {
                 let n = changes.len();
                 let r = app.store.edit_budgets(FIT_LABEL, &cats, |s| {
                     for p in changes {
-                        s.set_budget_override(p.category, m, None)?;
-                        s.save_budget_plan(p)?;
+                        if p.every_month {
+                            s.set_budget_override(p.category, m, None)?;
+                            s.save_budget_plan(p)?;
+                        } else {
+                            // One-month budgets stay in their month.
+                            s.set_budget_override(p.category, m, Some(p.amount))?;
+                        }
                     }
                     Ok(())
                 });
@@ -503,7 +554,9 @@ fn budget_row(
     if l.carry != 0 {
         sub.push_str(&format!("  ·  {} rolled over", w::fmt_signed(l.carry, base)));
     }
-    if store.budget_override(l.category, m).is_some() {
+    if store.budget_plan(l.category).is_some_and(|p| !p.every_month) {
+        sub.push_str("  ·  just this month");
+    } else if store.budget_override(l.category, m).is_some() {
         sub.push_str("  ·  this month only");
     }
     let name_w = p.layout_no_wrap(cat.name.clone(), theme::medium(14.0), t.text).size().x;
@@ -588,16 +641,47 @@ fn budget_row(
         });
         if !basic {
             c.horizontal_wrapped(|ui| {
-                w::toggle_row(ui, t, &mut st.this_month_only, &format!("Only for {}", m.label()));
+                ui.horizontal(|ui| {
+                    w::toggle_row(ui, t, &mut st.this_month_only, "Only for");
+                    // Recent months first: you're usually catching up on
+                    // the last one or two. Picking one turns "Only for" on.
+                    let now = Month::of(today);
+                    let mut months: Vec<Month> = (-12..=2).rev().map(|k| now.add(k)).collect();
+                    for x in [m, st.only_month] {
+                        if !months.contains(&x) {
+                            months.push(x);
+                        }
+                    }
+                    let label = egui::RichText::new(st.only_month.label()).color(if st.this_month_only {
+                        t.text
+                    } else {
+                        t.text3
+                    });
+                    let r = w::dropdown(ui, ("bmonth", l.category), label, 150.0, |ui| {
+                        for x in months {
+                            let r = w::option_value(ui, &mut st.only_month, x, x.label());
+                            crate::marks::record(|| format!("bmonth:{}", x.key()), r.rect);
+                            if r.clicked() {
+                                st.this_month_only = true;
+                            }
+                        }
+                    });
+                    crate::marks::record(|| "bmonth".into(), r.response.rect);
+                });
                 ui.add_space(12.0);
                 w::toggle_row(ui, t, &mut rollover, "Roll leftovers into next month");
             });
         }
         c.add_space(4.0);
         c.horizontal(|ui| {
-            if w::primary(ui, t, None, "Save").clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            let save = w::primary(ui, t, None, "Save");
+            crate::marks::record(|| "budget:save".into(), save.rect);
+            if save.clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 match money::parse(&st.amount, base) {
-                    Some(v) if v >= 0 => acts.push(Act::Save(l.category, v, rollover, st.this_month_only)),
+                    Some(v) if v >= 0 => {
+                        let only = st.this_month_only.then_some(st.only_month);
+                        acts.push(Act::Save(l.category, v, rollover, only));
+                    }
                     _ => app.toasts.error("That amount isn't a number"),
                 }
             }

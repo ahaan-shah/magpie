@@ -490,6 +490,9 @@ pub struct TxnForm {
     payee: String,
     /// The payee suggestion the arrow keys are on.
     payee_lit: Option<usize>,
+    /// A suggestion was just taken; a payee filed under several categories
+    /// stops offering them again until the name is edited.
+    payee_picked: bool,
     category: Option<RowId>,
     note: String,
     tags: String,
@@ -530,6 +533,7 @@ impl TxnForm {
             to_amount: String::new(),
             payee: String::new(),
             payee_lit: None,
+            payee_picked: false,
             category: None,
             note: String::new(),
             tags: String::new(),
@@ -753,21 +757,32 @@ impl TxnForm {
                 .payees
                 .get(app.store.version(), || analytics::payee_index(&app.store))
                 .clone();
-            let suggestions = |text: &str| {
+            // One row per category the payee is filed under, so a shop
+            // that's both groceries and dining offers both. Those still show
+            // once the whole name is typed, until one is picked.
+            let suggestions = |text: &str, picked: bool| {
                 let q = text.trim().to_lowercase();
                 if q.is_empty() {
                     return Vec::new();
                 }
                 payees
                     .iter()
-                    .filter(|p| p.name.to_lowercase().contains(&q) && p.name.to_lowercase() != q)
+                    .filter(|p| {
+                        let name = p.name.to_lowercase();
+                        name.contains(&q) && (name != q || (!p.also.is_empty() && !picked))
+                    })
+                    .flat_map(|p| {
+                        std::iter::once(p.category)
+                            .chain(p.also.iter().map(|c| Some(*c)))
+                            .map(move |c| (p, c))
+                    })
                     .take(6)
                     .collect::<Vec<_>>()
             };
             // Arrow keys move through the suggestions and Enter takes one.
             // They're read before the field so it doesn't move its cursor
             // or let Enter save the form.
-            let before = suggestions(&self.payee);
+            let before = suggestions(&self.payee, self.payee_picked);
             let mut picked = None;
             if ui.memory(|m| m.has_focus(payee_id)) && !before.is_empty() {
                 let none = egui::Modifiers::NONE;
@@ -787,14 +802,17 @@ impl TxnForm {
                 if let Some(i) = self.payee_lit
                     && ui.input_mut(|inp| inp.consume_key(none, egui::Key::Enter))
                 {
-                    picked = before.get(i.min(last)).map(|p| (*p).clone());
+                    picked = before
+                        .get(i.min(last))
+                        .map(|(p, c)| (p.name.clone(), *c, !p.also.is_empty()));
                 }
             }
             let r = w::text_field(ui, t, payee_id, &mut self.payee, hint, ui.available_width());
             if r.changed() {
                 self.payee_lit = None;
+                self.payee_picked = false;
             }
-            let matches = suggestions(&self.payee);
+            let matches = suggestions(&self.payee, self.payee_picked);
             if r.has_focus() && !matches.is_empty() && picked.is_none() {
                 self.payee_lit = self.payee_lit.map(|i| i.min(matches.len() - 1));
                 let lit = self.payee_lit;
@@ -805,20 +823,23 @@ impl TxnForm {
                     .show(|ui| {
                         ui.set_min_width(ui.available_width());
                         ui.spacing_mut().item_spacing.y = 2.0;
-                        for (i, p) in matches.iter().enumerate() {
-                            let cat = app.store.category_name(p.category).to_string();
+                        for (i, (p, c)) in matches.iter().enumerate() {
+                            let cat = app.store.category_name(*c).to_string();
                             let resp = w::option_lit(ui, false, lit == Some(i), format!("{}   ·  {cat}", p.name));
                             if resp.clicked() || resp.is_pointer_button_down_on() {
-                                picked = Some((*p).clone());
+                                picked = Some((p.name.clone(), *c, !p.also.is_empty()));
                             }
                         }
                     });
             }
-            if let Some(p) = picked {
-                self.payee = p.name.clone();
+            if let Some((name, c, several)) = picked {
+                self.payee = name;
                 self.payee_lit = None;
-                if self.auto_category && fits(p.category) {
-                    self.category = p.category;
+                self.payee_picked = true;
+                // A row naming one of several categories is a choice of
+                // category, even after picking one by hand.
+                if (self.auto_category || several) && fits(c) {
+                    self.category = c;
                 }
             }
             let q = self.payee.trim().to_lowercase();
@@ -2083,6 +2104,7 @@ impl CategoryForm {
                 category: id,
                 amount: 0,
                 rollover: false,
+                every_month: true,
             })
         });
         if app.toasts.ok(r).is_some() {
@@ -2323,7 +2345,7 @@ pub enum ConfirmAction {
 // ============================================================ Payee
 
 /// After a transaction's category changes: file every transaction from that
-/// payee there (and new ones), or just this one?
+/// payee there (and new ones), keep both categories, or just this one?
 pub struct PayeeAsk {
     payee: String,
     category: RowId,
@@ -2331,23 +2353,57 @@ pub struct PayeeAsk {
     others: usize,
     /// The payee's current default, if it has one.
     old: Option<RowId>,
+    /// Every category the payee is filed under now.
+    set: Vec<RowId>,
+    /// What "Use both" pairs the new category with: the default, or else
+    /// what most of its other transactions use.
+    usual: Option<RowId>,
 }
 
 impl PayeeAsk {
-    /// `None` when there's nothing to ask: the category already is the
-    /// payee's default, or it's a payee seen only this once.
+    /// `None` when there's nothing to ask: the category already is one of
+    /// the payee's, or it's a payee seen only this once.
     fn new(store: &Store, payee: &str, category: RowId) -> Option<PayeeAsk> {
-        let old = store.payee_category(payee);
-        if payee.trim().is_empty() || old == Some(category) {
+        let set = store.payee_categories(payee);
+        if payee.trim().is_empty() || set.contains(&category) {
             return None;
         }
+        let old = set.first().copied();
         let others = store.payee_txns_to_move(payee, category).len();
+        let usual = old.or_else(|| {
+            let key = magpie_core::store::payee_key(payee);
+            let mut counts: Vec<(RowId, usize)> = Vec::new();
+            for t in store.txns() {
+                if let Some(c) = t.category
+                    && c != category
+                    && !t.is_transfer()
+                    && magpie_core::store::payee_key(&t.payee) == key
+                {
+                    match counts.iter_mut().find(|x| x.0 == c) {
+                        Some(x) => x.1 += 1,
+                        None => counts.push((c, 1)),
+                    }
+                }
+            }
+            counts.iter().max_by_key(|x| x.1).map(|x| x.0)
+        });
         (others > 0 || old.is_some()).then(|| PayeeAsk {
             payee: payee.trim().to_string(),
             category,
             others,
             old,
+            set,
+            usual,
         })
+    }
+
+    /// "Groceries", "Groceries and Dining", "Groceries, Dining and Gifts".
+    fn names(store: &Store, ids: &[RowId]) -> String {
+        let names: Vec<&str> = ids.iter().map(|c| store.category_name(Some(*c))).collect();
+        match names.split_last() {
+            Some((last, rest)) if !rest.is_empty() => format!("{} and {last}", rest.join(", ")),
+            _ => names.join(""),
+        }
     }
 
     fn ui(&mut self, app: &mut App, ui: &mut Ui, t: &Theme) -> Outcome {
@@ -2359,17 +2415,14 @@ impl PayeeAsk {
         } else {
             format!("the other {n}")
         };
-        let body = match self.old {
+        let usual = Self::names(store, &self.set);
+        let mut body = match self.old {
             None => format!(
                 "Move {them} to {cat} too, and file new ones there from now on. You can still change any single one later."
             ),
-            Some(old) if n == 0 => format!(
-                "{payee} usually goes under {}. File new ones under {cat} instead?",
-                store.category_name(Some(old))
-            ),
-            Some(old) => format!(
-                "{payee} usually goes under {}. Switch {} and new ones to {cat}? Ones you picked by hand stay.",
-                store.category_name(Some(old)),
+            Some(_) if n == 0 => format!("{payee} usually goes under {usual}. File new ones under {cat} instead?"),
+            Some(_) => format!(
+                "{payee} usually goes under {usual}. Switch {} and new ones to {cat}? Ones you picked by hand stay.",
                 if n == 1 {
                     "that one".to_string()
                 } else {
@@ -2377,6 +2430,15 @@ impl PayeeAsk {
                 },
             ),
         };
+        let both = self.usual.is_some();
+        let several = self.set.len() > 1;
+        if both {
+            body.push_str(if several {
+                " Or add it to those, and pick one each time."
+            } else {
+                " Or keep both, and pick one each time."
+            });
+        }
         let (glyph, color) = store
             .category(self.category)
             .map(|c| (crate::icons::glyph(&c.icon), w::cat_color(c.color)))
@@ -2395,9 +2457,15 @@ impl PayeeAsk {
         ui.add_space(18.0);
         let mut all = false;
         let mut one = false;
+        let mut keep = false;
         ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let a = w::primary(ui, t, None, if n == 0 { "From now on" } else { "All of them" });
+                if both {
+                    let b = w::secondary(ui, t, None, if several { "Add it too" } else { "Keep both" });
+                    crate::marks::record(|| "payee:both".into(), b.rect);
+                    keep = b.clicked();
+                }
                 let o = w::ghost(ui, t, None, "Just this one");
                 crate::marks::record(|| "payee:all".into(), a.rect);
                 crate::marks::record(|| "payee:one".into(), o.rect);
@@ -2406,6 +2474,15 @@ impl PayeeAsk {
         });
         if one {
             app.toasts.undoable("Transaction updated");
+            return Outcome::Close;
+        }
+        if keep {
+            let r = app.store.add_payee_category(&self.payee, self.category, self.usual);
+            if app.toasts.ok(r).is_some() {
+                let set = app.store.payee_categories(&self.payee);
+                app.toasts
+                    .undoable(format!("{payee} can go under {}", Self::names(&app.store, &set)));
+            }
             return Outcome::Close;
         }
         if !all {

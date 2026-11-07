@@ -184,7 +184,22 @@ crates/app   (magpie-finance) the eframe app; binary `magpie`
   Setting a default moves every transaction from that payee the first time,
   but on later changes only those on the old default or uncategorized, so
   hand-picked one-offs stay. One undo step (`Op::Payee`).
-- **What's new after updates:** after an update, the sidebar's update spot
+- **Payees in several categories** (migration v4,
+  `payee_extra_categories`): `payee_categories` stays the main one (imports,
+  quick add and auto-fill use it; older versions still read it), extras sit
+  beside it. `PayeeAsk` offers "Keep both" (`Store::add_payee_category`,
+  moves nothing); with no default yet, the category most of the payee's
+  other transactions use becomes the main one. Payee suggestions show one
+  row per category, and still show on an exact name until one is picked.
+- **One-month budgets** (migration v4, `budget_plans.every_month`): a plan
+  with `every_month = false` exists only in months with an override, so
+  `budget::planned` is `None` elsewhere; use it (not `budget_plan`) to ask
+  "is this budgeted in month m". The editor's "Only for [month]" makes a
+  *just created* budget (`State::fresh`) one-month; on an existing monthly
+  budget it still means "a different amount that month". Picking another
+  month moves that month's own amount there and jumps the page to it.
+  Remove on a one-month budget clears only the month on screen.
+- **What's new after updates:**- **What's new after updates:** after an update, the sidebar's update spot
   shows "What's new" (a gift with an accent dot). It opens a card of the
   release's points (`whatsnew.rs`); the row stays until the card has been
   opened and closed (the modal host calls `dismiss`; moving between pages

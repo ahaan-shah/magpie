@@ -626,7 +626,6 @@ fn this_month(ui: &mut Ui, t: &Theme, rect: Rect, d: &Dash) {
 }
 
 fn categories_card(ui: &mut Ui, t: &Theme, store: &Store, d: &Dash, acts: &mut Vec<Act>) {
-    let base = d.base;
     w::card_header(ui, t, "Where it went", |ui| {
         ui.label(w::faint(t, d.month.short()));
     });
@@ -640,14 +639,30 @@ fn categories_card(ui: &mut Ui, t: &Theme, store: &Store, d: &Dash, acts: &mut V
         );
         return;
     }
+    if let Some(c) = donut_legend(ui, t, store, &d.cats, "dash") {
+        acts.push(Act::CategoryLedger(c, d.month));
+    }
+}
+
+/// "Where it went": a donut of the top categories (the rest grouped as
+/// "Other") with a legend. Shared with Reports. Returns the category whose
+/// slice or legend row was clicked. `cats` must be sorted, biggest first.
+pub fn donut_legend(
+    ui: &mut Ui,
+    t: &Theme,
+    store: &Store,
+    cats: &[(Option<RowId>, i64)],
+    salt: &str,
+) -> Option<Option<RowId>> {
+    let mut clicked = None;
     let area = ui.available_rect_before_wrap();
     let donut_size = (area.height() - 4.0).min(area.width() * 0.5);
     let donut_rect = Rect::from_min_size(area.min, vec2(donut_size, donut_size));
     // Group the tail into "Other" only when it holds two or more categories;
     // a lone seventh one is shown under its own name.
-    let shown = if d.cats.len() == 7 { 7 } else { 6 };
-    let top: Vec<_> = d.cats.iter().take(shown).collect();
-    let rest: i64 = d.cats.iter().skip(shown).map(|x| x.1).sum();
+    let shown = if cats.len() == 7 { 7 } else { 6 };
+    let top: Vec<_> = cats.iter().take(shown).collect();
+    let rest: i64 = cats.iter().skip(shown).map(|x| x.1).sum();
     let mut slices: Vec<charts::Slice> = top
         .iter()
         .map(|(c, v)| {
@@ -672,15 +687,15 @@ fn categories_card(ui: &mut Ui, t: &Theme, store: &Store, d: &Dash, acts: &mut V
     for (s, c) in slices.iter_mut().zip(colors) {
         s.color = c;
     }
-    let hovered = charts::donut(ui, t, Id::new("dash-donut"), donut_rect, &slices, 18.0);
-    let total: i64 = d.cats.iter().map(|x| x.1).sum();
+    let hovered = charts::donut(ui, t, Id::new((salt, "donut")), donut_rect, &slices, 18.0);
+    let total: i64 = cats.iter().map(|x| x.1).sum();
     let (title, value) = match hovered {
         Some(i) => (slices[i].label.clone(), slices[i].value as i64),
         None => ("Total".into(), total),
     };
-    charts::donut_center(ui, t, donut_rect, 18.0, &w::fmt_whole(value, base), &title);
+    charts::donut_center(ui, t, donut_rect, 18.0, &w::fmt_whole(value, store.base()), &title);
     if hovered.is_some_and(|i| i < top.len()) && ui.input(|i| i.pointer.primary_clicked()) {
-        acts.push(Act::CategoryLedger(top[hovered.unwrap_or(0)].0, d.month));
+        clicked = Some(top[hovered.unwrap_or(0)].0);
     }
 
     // Legend list
@@ -690,7 +705,7 @@ fn categories_card(ui: &mut Ui, t: &Theme, store: &Store, d: &Dash, acts: &mut V
         let (r, resp) = child.allocate_exact_size(vec2(list.width(), 26.0), Sense::click());
         let hl = motion::toggle(
             child.ctx(),
-            Id::new(("dash-leg", i)),
+            Id::new((salt, "leg", i)),
             resp.hovered() || hovered == Some(i),
             motion::MICRO,
         );
@@ -722,9 +737,10 @@ fn categories_card(ui: &mut Ui, t: &Theme, store: &Store, d: &Dash, acts: &mut V
             pct.left() - 10.0 - (r.left() + 16.0),
         );
         if resp.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() && i < top.len() {
-            acts.push(Act::CategoryLedger(top[i].0, d.month));
+            clicked = Some(top[i].0);
         }
     }
+    clicked
 }
 
 fn budgets_card(ui: &mut Ui, t: &Theme, store: &Store, d: &Dash, acts: &mut Vec<Act>) {

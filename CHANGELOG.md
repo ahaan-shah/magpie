@@ -4,6 +4,23 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Reports: a "Last month" range, for finishing last month's entries after
+  the new one has started.
+- Reports: "Where it went", the category donut from Home, for whatever
+  period you pick. In a single month, clicking a slice opens those
+  transactions.
+- Budgets for a single month: "Only for" now has a month picker (it starts
+  on the month you're looking at). A new budget set for one month shows up
+  only in that month, so you can budget a late October farewell from
+  November. A monthly budget given a different amount for one month works
+  as before. Database migration v4.
+- Payees in more than one category: when you change a transaction's
+  category, "Keep both" files the payee under both without moving anything.
+  Typing the payee then suggests each of its categories.
+
 ## [0.2.6] - 2026-10-17
 
 Tidier charts when amounts are big or colours repeat.
