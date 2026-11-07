@@ -657,7 +657,14 @@ fn budget_row(
                     } else {
                         t.text3
                     });
-                    let r = w::dropdown(ui, ("bmonth", l.category), label, 150.0, |ui| {
+                    // Wide enough for the longest name ("September 2026")
+                    // in the list rows, which also hold a check mark.
+                    let font = egui::TextStyle::Button.resolve(ui.style());
+                    let widest = months
+                        .iter()
+                        .map(|x| ui.painter().layout_no_wrap(x.label(), font.clone(), t.text).size().x)
+                        .fold(0.0, f32::max);
+                    let r = w::dropdown(ui, ("bmonth", l.category), label, widest + 84.0, |ui| {
                         for x in months {
                             let r = w::option_value(ui, &mut st.only_month, x, x.label());
                             crate::marks::record(|| format!("bmonth:{}", x.key()), r.rect);

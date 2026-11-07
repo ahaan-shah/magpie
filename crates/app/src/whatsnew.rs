@@ -33,6 +33,32 @@ pub struct Notes {
 /// and why it helps, not how it works.
 pub const RELEASES: &[Notes] = &[
     Notes {
+        version: "0.2.7",
+        items: &[
+            Item {
+                icon: ph::CLOCK_COUNTER_CLOCKWISE,
+                title: "Last month in Reports",
+                body: "Still logging last month after the new one has started? Reports now has a \
+                       Last month view, with the \"Where it went\" chart from Home.",
+                image: None,
+            },
+            Item {
+                icon: ph::CALENDAR_CHECK,
+                title: "A budget for one month",
+                body: "Pick which month a budget is for, like a farewell back in October, and it \
+                       shows up only in that month.",
+                image: None,
+            },
+            Item {
+                icon: ph::TAG,
+                title: "Payees in more than one category",
+                body: "Is a shop sometimes groceries and sometimes dining? Choose \"Keep both\" and \
+                       Magpie offers each when you type its name.",
+                image: None,
+            },
+        ],
+    },
+    Notes {
         version: "0.2.6",
         items: &[
             Item {

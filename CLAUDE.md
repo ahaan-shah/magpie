@@ -313,7 +313,9 @@ from the README until they're actually published. The PKGBUILD and cask in
 
 ## Where things stand
 
-- **Released:** up to v0.2.6 (donut and big-amount fit fixes). v0.2.5
+- **Released:** up to v0.2.7 (Last month and the donut in Reports,
+  one-month budgets, payees in several categories; migration v4). v0.2.6
+  fixed donut and big-amount fit. v0.2.5
   brought payee default categories (migration v3).
   v0.2.4 brought payee suggestions with arrow keys and What's new staying
   until read. v0.2.3 brought What's new, category type-ahead,
