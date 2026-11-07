@@ -304,6 +304,8 @@ the real app. Release builds use fat LTO and take minutes; use
    without publishing.
 6. Asset names are a contract with `install.sh`, `install.ps1` and the
    in-app updater (`update::asset_name`). Don't rename them.
+7. Don't install the new version locally (`install.sh` or otherwise) unless
+   the maintainer asks.
 
 Install paths for users: `install.sh` (curl one-liner) for Linux/macOS and
 `install.ps1` (`irm … | iex`) or the setup .exe for Windows are the
