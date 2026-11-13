@@ -1,9 +1,8 @@
 # Magpie — briefing for Claude sessions
 
-You're picking up Magpie mid-flight. Read this whole file before touching
-anything: it's the shared memory of every session that has worked on this
-repo, written so you can carry on as if you'd built it yourself. Machine-
-specific notes for the maintainer's own computer live in `CLAUDE.local.md`
+You're picking up Magpie mid-flight. This file is the shared memory of every
+session that has worked on this repo, written so you can carry on as if you'd
+built it yourself. Machine-specific notes for the maintainer's own computer live in `CLAUDE.local.md`
 (git-ignored); read it too if it exists.
 
 If you run alongside other sessions, follow **Working with other sessions**
@@ -29,7 +28,7 @@ The bar the maintainer set, and holds every change to: **blazingly fast,
 beautiful, light on RAM, fluid animations, robust (it must never crash),
 easy to install on Linux, macOS and Windows**.
 
-## How the maintainer works (read this twice)
+## How the maintainer works
 
 - **Nothing outward-facing without an explicit go.** Releases (tags), making
   things public, publishing packages, force-pushes: only when asked in so
