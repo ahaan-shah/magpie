@@ -4,6 +4,14 @@ All notable changes to Magpie are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- A friendlier installer on Linux and macOS: `install.sh` shows "MAGPIE" in
+  big orange letters, the version it's installing and a progress bar with
+  megabytes, then a tick for each step. Piped into a log, it prints plain
+  lines.
+
 ## [0.2.7] - 2026-11-07
 
 Last month in Reports, one-month budgets, and payees in more than one
